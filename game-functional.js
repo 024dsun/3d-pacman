@@ -66,21 +66,14 @@ function init() {
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     scene.add(floor);
-    // create maze
+    // scene initialization
     createMaze();
-    // create pacman
     createPacman();
-    // create pellets and power ups
     createPellets();
-    // create ghosts
     createGhosts();
-    // setup input
     setupInput();
-    // create HUD
     createHUD();
-    // window resize
     window.addEventListener('resize', onWindowResize);
-    // start clock
     clock = new THREE.Clock();
 }
 
@@ -104,7 +97,6 @@ function createMaze() {
     // inner walls - vertical
     positions.push(
         [-10, 0, -8, 1, wallHeight, 8],
-        
         [-6, 0, 2, 1, wallHeight, 8],
         [-2, 0, -6, 1, wallHeight, 8],
         [-2, 0, 6, 1, wallHeight, 4],
@@ -266,19 +258,21 @@ function createGhosts() {
 // user input handling
 function setupInput() {
     window.addEventListener('keydown', (e) => {
-        keys[e.key.toLowerCase()] = true;
+        let pressedKey = e.key.toLowerCase();
+        keys[pressedKey] = true;
         // camera mode switching (1-4 keys)
-        if (e.key >= '1' && e.key <= '4') {
-            cameraMode = parseInt(e.key);
+        if (pressedKey >= '1' && pressedKey <= '4') {
+            cameraMode = parseInt(pressedKey);
         }
         // restart game
-        if (e.key.toLowerCase() === 'r' && gameOver) {
+        if (pressedKey === 'r' && gameOver) {
             location.reload();
         }
     });
     
     window.addEventListener('keyup', (e) => {
-        keys[e.key.toLowerCase()] = false;
+        let releasedKey = e.key.toLowerCase();
+        keys[releasedKey] = false;
     });
 }
 
@@ -298,15 +292,14 @@ function createHUD() {
     updateHUD();
 }
 
+// update hud
 function updateHUD() {
     const powerUpText = powerUpActive ? `<br><span style="color: #ff00ff; font-weight: bold;">POWER UP: ${Math.ceil(powerUpTimer)}s</span>` : '';
     const gameOverText = gameOver ? '<br><br><span style="color: #ff0000;">GAME OVER! Press R to restart</span>' : '';
     const totalPellets = pellets.length + powerUps.length;
     const winText = !gameOver && totalPellets === 0 ? '<br><br><span style="color: #00ff00;">YOU WIN! Press R to restart</span>' : '';
-    
     const cameraNames = ['', 'Top-Down', 'Third-Person', 'First-Person', 'Spectator'];
     const cameraText = `<br><span style="color: #888;">Camera: ${cameraNames[cameraMode]} (1-4)</span>`;
-    
     hudElement.innerHTML = `
         Score: ${score}<br>
         Lives: ${lives}${cameraText}<br>
@@ -580,21 +573,21 @@ function updateCamera() {
     const pacPos = pacman.position;
     
     switch (cameraMode) {
-        case 1: // top down
+        // top down
+        case 1:
             camera.position.set(pacPos.x, 30, pacPos.z);
             camera.lookAt(pacPos.x, 0, pacPos.z);
             break;
-        
-        case 2: // third person (following pacman)
+        // third person (following pacman)
+        case 2:
             camera.position.x = pacPos.x;
             camera.position.y = 15;
             camera.position.z = pacPos.z + 15;
             camera.lookAt(pacPos.x, 0, pacPos.z);
             break;
-        
-        case 3: // first person
+        // first person
+        case 3:
             camera.position.set(pacPos.x, 2, pacPos.z);
-            // look in direction pacman is facing
             const lookDir = new THREE.Vector3(
                 Math.cos(pacman.rotation.y),
                 0,
@@ -606,14 +599,13 @@ function updateCamera() {
                 pacPos.z + lookDir.z * 2
             );
             break;
-        
-        case 4: // spectator (static overview)
+        // spectator (static overview)
+        case 4:
             camera.position.set(0, 40, 20);
             camera.lookAt(0, 0, 0);
             break;
-        
+        // default mode 2
         default:
-            // default mode 2
             camera.position.x = pacPos.x;
             camera.position.z = pacPos.z + 15;
             camera.lookAt(pacPos.x, 0, pacPos.z);
