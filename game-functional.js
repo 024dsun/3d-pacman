@@ -24,14 +24,15 @@ let floor;
 let walls = [];
 let pacman;
 let pacmanSpeed = 5;
-let pacmanMouthAngle = 0;
+// let pacmanMouthAngle = 0;
 let ghosts = [];
 let pellets = [];
 let powerUps = [];
 let score = 0;
 let lives = 3;
 let gameOver = false;
-let powerUpActive = false, powerUpTimer = 0;
+let powerUpActive = false
+let powerUpTimer = 0;
 let keys = {};
 let hudElement;
 
@@ -87,15 +88,12 @@ function createMaze() {
     const wallHeight = 2;
     const positions = [];
     
-    // outer walls
+    // insert walls
     positions.push(
         [0, 0, -14, 30, wallHeight, 1],
         [0, 0, 14, 30, wallHeight, 1],
         [-14, 0, 0, 1, wallHeight, 30],
-        [14, 0, 0, 1, wallHeight, 30]
-    );
-    // inner walls - vertical
-    positions.push(
+        [14, 0, 0, 1, wallHeight, 30],
         [-10, 0, -8, 1, wallHeight, 8],
         [-6, 0, 2, 1, wallHeight, 8],
         [-2, 0, -6, 1, wallHeight, 8],
@@ -104,10 +102,7 @@ function createMaze() {
         [2, 0, 2, 1, wallHeight, 12],
         [6, 0, 6, 1, wallHeight, 6],
         [10, 0, -4, 1, wallHeight, 12],
-        [10, 0, 10, 1, wallHeight, 6]
-    );
-    // inner walls - horizontal
-    positions.push(
+        [10, 0, 10, 1, wallHeight, 6],
         [-8, 0, -10, 6, wallHeight, 1],
         [0, 0, -10, 6, wallHeight, 1],
         [8, 0, -10, 6, wallHeight, 1],
@@ -232,15 +227,15 @@ function createGhosts() {
         const ghostMesh = new THREE.Mesh(geometry, material);
         ghostMesh.position.set(...positions[i]);
         ghostMesh.castShadow = true;
-        // add eyes
-        const eyeGeometry = new THREE.SphereGeometry(0.1, 16, 16);
-        const eyeMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
-        const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-        leftEye.position.set(0.15, 0.15, 0.4);
-        ghostMesh.add(leftEye);
-        const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-        rightEye.position.set(-0.15, 0.15, 0.4);
-        ghostMesh.add(rightEye);
+        // TODO: add eyes
+        // const eyeGeometry = new THREE.SphereGeometry(0.1, 16, 16);
+        // const eyeMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
+        // const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+        // leftEye.position.set(0.15, 0.15, 0.4);
+        // ghostMesh.add(leftEye);
+        // const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+        // rightEye.position.set(-0.15, 0.15, 0.4);
+        // ghostMesh.add(rightEye);
         // add to scene
         scene.add(ghostMesh);
         ghosts.push({
@@ -295,15 +290,16 @@ function createHUD() {
 // update hud
 function updateHUD() {
     const powerUpText = powerUpActive ? `<br><span style="color: #ff00ff; font-weight: bold;">POWER UP: ${Math.ceil(powerUpTimer)}s</span>` : '';
-    const gameOverText = gameOver ? '<br><br><span style="color: #ff0000;">GAME OVER! Press R to restart</span>' : '';
-    const totalPellets = pellets.length + powerUps.length;
-    const winText = !gameOver && totalPellets === 0 ? '<br><br><span style="color: #00ff00;">YOU WIN! Press R to restart</span>' : '';
+    let totalPellets = pellets.length + powerUps.length;
+    const gameOverText = gameOver && totalPellets !== 0 ? '<br><br><span style="color: #ff0000;">GAME OVER! Press R to restart</span>' : '';
+    const winText = gameOver && totalPellets === 0 ? '<br><br><span style="color: #00ff00;">YOU WIN! Press R to restart</span>' : '';
     const cameraNames = ['', 'Top-Down', 'Third-Person', 'First-Person', 'Spectator'];
     const cameraText = `<br><span style="color: #888;">Camera: ${cameraNames[cameraMode]} (1-4)</span>`;
     hudElement.innerHTML = `
         Score: ${score}<br>
         Lives: ${lives}${cameraText}<br>
-        Pellets: ${totalPellets}<br>
+        Pellets: ${pellets.length}<br>
+        Power Ups: ${powerUps.length}<br>
         WASD/arrow keys to move${powerUpText}${gameOverText}${winText}
     `;
 }
@@ -341,7 +337,7 @@ function update(delta) {
         return;
     }
     // check win condition - all pellets collected
-    if (pellets.length === 0) {
+    if (pellets.length === 0 && powerUps.length === 0) {
         gameOver = true;
         updateHUD();
         return;
@@ -384,10 +380,10 @@ function updatePacman(delta) {
         // rotate to face movement
         const angle = Math.atan2(velocity.z, velocity.x);
         pacman.rotation.y = angle;
-        // mouth animation
-        pacmanMouthAngle += delta * 8;
-        const mouthScale = 1 + Math.sin(pacmanMouthAngle) * 0.1;
-        pacman.scale.set(mouthScale, 1, 1);
+        // TODO: mouth animation
+        // pacmanMouthAngle += delta * 8;
+        // const mouthScale = 1 + Math.sin(pacmanMouthAngle) * 0.1;
+        // pacman.scale.set(mouthScale, 1, 1);
     }
 }
 
