@@ -150,6 +150,23 @@ function createMaze() {
     });
 }
 
+let adrenalineTimer = 0;
+const raycaster = new THREE.Raycaster();
+
+function checkLineOfSight(startPos, targetPos) {
+    const direction = new THREE.Vector3().subVectors(targetPos, startPos).normalize();
+    const dist = startPos.distanceTo(targetPos);
+    
+    raycaster.set(startPos, direction);
+    
+    const intersects = raycaster.intersectObjects(walls);
+    
+    if (intersects.length > 0 && intersects[0].distance < dist) {
+        return false;
+    }
+    return true;
+}
+
 // create pacman
 function createPacman() {
     const geometry = new THREE.SphereGeometry(0.5, 32, 32);
@@ -237,7 +254,8 @@ function createGhosts() {
         const material = new THREE.MeshStandardMaterial({ 
             color: color,
             emissive: color,
-            emissiveIntensity: 0.3
+            emissiveIntensity: 0.3,
+            transparent: true
         });
         const ghostMesh = new THREE.Mesh(geometry, material);
         ghostMesh.position.set(...positions[i]);
@@ -252,15 +270,22 @@ function createGhosts() {
         // rightEye.position.set(-0.15, 0.15, 0.4);
         // ghostMesh.add(rightEye);
         // add to scene
+
+        const ghostLight = new THREE.PointLight(color, 1.5, 8);
+        ghostLight.position.set(0, 0.5, 0);
+        scene.add(ghostLight);
+
         scene.add(ghostMesh);
         ghosts.push({
             mesh: ghostMesh,
+            light: ghostLight,
             velocity: new THREE.Vector3(),
             speed: 2,
             startPosition: positions[i].slice(),
             color: color,
             respawnTime: 0,
-            immuneToPowerUp: false
+            immuneToPowerUp: false,
+            aggroTimmer: 0 // for speedup when pacman sees it
         });
     });
 }
@@ -384,28 +409,25 @@ function checkWallCollisionSimple(position) {
 
 // game update loop
 function update(delta) {
-    if (gameOver) {
-        updateHUD();
-        return;
-    }
-    // handle pause
-    if (isPaused) {
-        return;
-    }
-    // track game time and scale difficulty
+    if (gameOver) { updateHUD(); return; }
+    if (isPaused) return;
+
     gameTime += delta;
-    // ghosts speed up 5% every 30 seconds
-    const speedMultiplier = 1 + Math.floor(gameTime / 30) * 0.05;
-    ghosts.forEach(ghost => {
-        ghost.speed = baseGhostSpeed * speedMultiplier;
-    });
-    // check win condition - all pellets collected
+    
+    // Decrement Global Adrenaline Timer (Pacman's timer)
+    if (adrenalineTimer > 0) {
+        adrenalineTimer -= delta;
+    }
+
+    const speedMultiplier = 1.2;
+    ghosts.forEach(ghost => ghost.speed = baseGhostSpeed * speedMultiplier);
+
     if (pellets.length === 0 && powerUps.length === 0) {
         gameOver = true;
         updateHUD();
         return;
     }
-    // update power-up timer
+
     if (powerUpActive) {
         powerUpTimer -= delta;
         if (powerUpTimer <= 0) {
@@ -414,75 +436,68 @@ function update(delta) {
         }
         updateHUD();
     }
-    // update characters and pellets
+
     updatePacman(delta);
     checkPelletCollection();
     checkPowerUpCollection();
     checkGhostCollisions();
-    updateGhosts(delta);
+    updateGhosts(delta); // This now handles setting the adrenalineTimer
     animatePellets();
     animatePowerUps(delta);
     updateCamera();
-    // update HUD periodically (every frame for time display)
-    if (Math.floor(gameTime) !== Math.floor(gameTime - delta)) {
-        updateHUD();
-    }
+
+    updateHUD();
 }
 
 // pacman update
 function updatePacman(delta) {
     let velocity = new THREE.Vector3(0, 0, 0);
 
-    if(cameraMode !== 3) {
-        // check valid keys for movement
+    // --- PACMAN SPEED LOGIC ---
+    // If adrenalineTimer > 0 (set by ghost seeing you), YOU run faster too
+    let currentSpeed = (adrenalineTimer > 0) ? 9.0 : pacmanSpeed; 
+    // --------------------------
+
+    // Input Handling
+    if (cameraMode !== 3) {
         if (keys['w'] || keys['arrowup']) velocity.z -= 1;
         if (keys['s'] || keys['arrowdown']) velocity.z += 1;
         if (keys['a'] || keys['arrowleft']) velocity.x -= 1;
         if (keys['d'] || keys['arrowright']) velocity.x += 1;
     } else {
-        // first person mode movement
-        const forward = new THREE.Vector3()
+        const forward = new THREE.Vector3();
         camera.getWorldDirection(forward);
-        forward.y = 0;
-        forward.normalize();
-        const right = new THREE.Vector3().crossVectors(camera.up, forward).normalize();
+        forward.y = 0; forward.normalize();
+        const right = new THREE.Vector3();
+        right.crossVectors(camera.up, forward).normalize();
         if (keys['w'] || keys['arrowup']) velocity.add(forward);
         if (keys['s'] || keys['arrowdown']) velocity.sub(forward);
-        if (keys['a'] || keys['arrowleft']) velocity.add(right);
-        if (keys['d'] || keys['arrowright']) velocity.sub(right);
+        if (keys['a'] || keys['arrowleft']) velocity.sub(right);
+        if (keys['d'] || keys['arrowright']) velocity.add(right);
     }
     
+    // Movement Application
     if (velocity.length() > 0) {
-        velocity.normalize().multiplyScalar(pacmanSpeed * delta);
+        velocity.normalize().multiplyScalar(currentSpeed * delta);
         const newPos = pacman.position.clone().add(velocity);
         if (!checkWallCollision(newPos)) {
             pacman.position.copy(newPos);
         }
-        
         if (cameraMode !== 3) {
-            const angle = Math.atan2(velocity.z, velocity.x);
-            pacman.rotation.y = -angle;
+            pacman.rotation.y = -Math.atan2(velocity.z, velocity.x);
         }
     }
+
+    if (cameraMode === 3) pacman.rotation.y = cameraYaw + Math.PI; 
     
-    // update pacman position
-    if (velocity.length() > 0) {
-        velocity.normalize().multiplyScalar(pacmanSpeed * delta);
-        const newPos = pacman.position.clone().add(velocity);
-        if (!checkWallCollision(newPos)) {
-            pacman.position.copy(newPos);
-        }
-        // rotate to face movement direction (only in non-first-person modes)
-        if (cameraMode !== 3) {
-            const angle = Math.atan2(velocity.z, velocity.x);
-            pacman.rotation.y = angle;
-        }
+    // Visual Feedback
+    if (adrenalineTimer > 0) {
+        pacmanLight.color.setHex(0x00ffff); // Cyan = Adrenaline
+        pacmanLight.intensity = 3;
+    } else {
+        pacmanLight.color.setHex(0xffff00);
+        pacmanLight.intensity = 2;
     }
-    // in first person mode, pacman faces where the mouse is looking
-    if (cameraMode === 3) {
-        pacman.rotation.y = cameraYaw + Math.PI / 2;
-    }
-    // update light position to follow pacman
     pacmanLight.position.set(pacman.position.x, pacman.position.y + 1, pacman.position.z);
 }
 
@@ -574,86 +589,106 @@ function resetLevel() {
     updateHUD();
 }
 
-// ghost update
 function updateGhosts(delta) {
     ghosts.forEach((ghost, index) => {
-        // update respawn timer
-        if (ghost.respawnTime) {
-            ghost.respawnTime -= delta;
-            if (ghost.respawnTime < 0) ghost.respawnTime = 0;
-        }
-        // hide ghosts until they're close (horror effect)
+        // 1. Manage Timers
+        if (ghost.respawnTime > 0) ghost.respawnTime -= delta;
+        if (ghost.aggroTimer > 0) ghost.aggroTimer -= delta;
+
+        // 2. Visibility & Logic
         const distToPacman = ghost.mesh.position.distanceTo(pacman.position);
+        
+        // Check Line of Sight
+        let canSeePacman = false;
+        // Only check if alive and within reasonable range (optimization)
+        if (ghost.respawnTime <= 0 && distToPacman < 20) {
+            if (checkLineOfSight(ghost.mesh.position, pacman.position)) {
+                canSeePacman = true;
+                
+                // --- THE TRIGGER ---
+                // If eye contact is made:
+                ghost.aggroTimer = 3.0; // 1. Ghost gets angry
+                adrenalineTimer = 3.0;  // 2. Pacman gets scared (Global variable)
+                // -------------------
+            }
+        }
+
+        // 3. Visuals (Fading)
         const visibilityRange = 7;
-        if (distToPacman > visibilityRange) {
-            ghost.mesh.visible = false;
-        } else {
-            ghost.mesh.visible = true;
-            // fade in based on distance
-            const opacity = 1 - (distToPacman / visibilityRange) * 0.5;
-            ghost.mesh.material.opacity = opacity;
-            ghost.mesh.material.transparent = true;
+        let opacity = 0;
+        if (distToPacman <= visibilityRange) opacity = 1 - (distToPacman / visibilityRange) * 0.5;
+        
+        // Force visibility if Aggro (so you can see them chasing you from far away)
+        if (ghost.aggroTimer > 0) opacity = Math.max(opacity, 1.0);
+
+        ghost.mesh.visible = opacity > 0;
+        ghost.mesh.material.opacity = opacity;
+        ghost.light.intensity = opacity * 5;
+
+        // 4. Color & State
+        let currentSpeed = ghost.speed;
+        let currentColor = ghost.color;
+
+        if (ghost.respawnTime > 0) {
+             const flash = Math.sin(Date.now() * 0.02) > 0;
+             currentColor = flash ? 0xffffff : ghost.color;
+        } 
+        else if (powerUpActive && !ghost.immuneToPowerUp) {
+            currentColor = 0x0000ff; // Vulnerable Blue
+            currentSpeed *= 0.5; // Slow down when vulnerable
+        } 
+        else if (ghost.aggroTimer > 0) {
+            currentColor = 0xff0000; // RED RAGE
+            currentSpeed *= 2.5;     // 2.5x Speed Boost
         }
-        // change color
-        if (ghost.respawnTime && ghost.respawnTime > 0) {
-            const flash = Math.sin(Date.now() * 0.02) > 0;
-            ghost.mesh.material.color.setHex(flash ? 0xffffff : ghost.color);
-            ghost.mesh.material.emissive.setHex(flash ? 0xffffff : ghost.color);
-        } else if (powerUpActive && !ghost.immuneToPowerUp) {
-            ghost.mesh.material.color.setHex(0x0000ff);
-            ghost.mesh.material.emissive.setHex(0x0000ff);
-        } else {
-            ghost.mesh.material.color.setHex(ghost.color);
-            ghost.mesh.material.emissive.setHex(ghost.color);
-        }
-        // determine movement direction based on vulnerability
+
+        ghost.mesh.material.color.setHex(currentColor);
+        ghost.mesh.material.emissive.setHex(currentColor);
+        ghost.light.color.setHex(currentColor);
+
+        // 5. Movement Logic
         let direction;
         const isVulnerable = powerUpActive && !ghost.immuneToPowerUp;
-        // run from pacman
+        
         if (isVulnerable && ghost.respawnTime <= 0) {
-            direction = new THREE.Vector3()
-                .subVectors(ghost.mesh.position, pacman.position)
-                .normalize();
-        } 
-        // chase pacman
-        else {
-            direction = new THREE.Vector3()
-                .subVectors(pacman.position, ghost.mesh.position)
-                .normalize();
+            // Flee
+            direction = new THREE.Vector3().subVectors(ghost.mesh.position, pacman.position).normalize();
+        } else {
+            // Chase
+            direction = new THREE.Vector3().subVectors(pacman.position, ghost.mesh.position).normalize();
         }
-        const movement = direction.clone().multiplyScalar(ghost.speed * delta);
+
+        const movement = direction.clone().multiplyScalar(currentSpeed * delta);
         const newPos = ghost.mesh.position.clone().add(movement);
-        // keep within bounds
+
+        // Bounds and Collision
         newPos.x = Math.max(-13, Math.min(13, newPos.x));
         newPos.z = Math.max(-13, Math.min(13, newPos.z));
-        // wall sliding
+
         if (!checkWallCollision(newPos, 0.5)) {
             ghost.mesh.position.copy(newPos);
         } else {
-            const slideX = ghost.mesh.position.clone();
-            slideX.x += movement.x;
+            // Slide along X
+            const slideX = ghost.mesh.position.clone(); slideX.x += movement.x;
             if (!checkWallCollision(slideX, 0.5)) {
                 ghost.mesh.position.copy(slideX);
             } else {
-                const slideZ = ghost.mesh.position.clone();
-                slideZ.z += movement.z;
+                // Slide along Z
+                const slideZ = ghost.mesh.position.clone(); slideZ.z += movement.z;
                 if (!checkWallCollision(slideZ, 0.5)) {
                     ghost.mesh.position.copy(slideZ);
                 } else {
-                    const randomDir = new THREE.Vector3(
-                        (Math.random() - 0.5) * 2,
-                        0,
-                        (Math.random() - 0.5) * 2
-                    ).normalize().multiplyScalar(ghost.speed * delta);
+                    // Random wiggle
+                    const randomDir = new THREE.Vector3((Math.random()-0.5),0,(Math.random()-0.5)).normalize().multiplyScalar(ghost.speed*delta);
                     const randomPos = ghost.mesh.position.clone().add(randomDir);
-                    if (!checkWallCollision(randomPos, 0.5)) {
-                        ghost.mesh.position.copy(randomPos);
-                    }
+                    if(!checkWallCollision(randomPos, 0.5)) ghost.mesh.position.copy(randomPos);
                 }
             }
         }
-        // bob animation
+
         ghost.mesh.position.y = 0.5 + Math.sin(Date.now() * 0.003 + index) * 0.1;
+        ghost.light.position.copy(ghost.mesh.position);
+        ghost.light.position.y += 0.2;
     });
 }
 
