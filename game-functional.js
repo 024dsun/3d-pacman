@@ -302,7 +302,7 @@ function setupInput() {
     document.addEventListener('mousemove', (e) => {
         if (cameraMode === 3 && document.pointerLockElement === renderer.domElement) {
             const sensitivity = 0.002;
-            cameraYaw -= e.movementX * sensitivity;
+            cameraYaw += e.movementX * sensitivity;
             cameraPitch -= e.movementY * sensitivity;
             // clamp pitch to avoid flipping
             cameraPitch = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, cameraPitch));
@@ -432,21 +432,37 @@ function update(delta) {
 // pacman update
 function updatePacman(delta) {
     let velocity = new THREE.Vector3(0, 0, 0);
-    // check valid keys for movement
-    if (keys['w'] || keys['arrowup']) velocity.z -= 1;
-    if (keys['s'] || keys['arrowdown']) velocity.z += 1;
-    if (keys['a'] || keys['arrowleft']) velocity.x -= 1;
-    if (keys['d'] || keys['arrowright']) velocity.x += 1;
+
+    if(cameraMode !== 3) {
+        // check valid keys for movement
+        if (keys['w'] || keys['arrowup']) velocity.z -= 1;
+        if (keys['s'] || keys['arrowdown']) velocity.z += 1;
+        if (keys['a'] || keys['arrowleft']) velocity.x -= 1;
+        if (keys['d'] || keys['arrowright']) velocity.x += 1;
+    } else {
+        // first person mode movement
+        const forward = new THREE.Vector3()
+        camera.getWorldDirection(forward);
+        forward.y = 0;
+        forward.normalize();
+        const right = new THREE.Vector3().crossVectors(camera.up, forward).normalize();
+        if (keys['w'] || keys['arrowup']) velocity.add(forward);
+        if (keys['s'] || keys['arrowdown']) velocity.sub(forward);
+        if (keys['a'] || keys['arrowleft']) velocity.add(right);
+        if (keys['d'] || keys['arrowright']) velocity.sub(right);
+    }
     
-    // in first person mode, rotate movement relative to where we're looking
-    if (cameraMode === 3 && velocity.length() > 0) {
-        // rotate velocity by camera yaw so W moves forward relative to view
-        const cos = Math.cos(cameraYaw);
-        const sin = Math.sin(cameraYaw);
-        const rotatedX = velocity.x * cos - velocity.z * sin;
-        const rotatedZ = velocity.x * sin + velocity.z * cos;
-        velocity.x = rotatedX;
-        velocity.z = rotatedZ;
+    if (velocity.length() > 0) {
+        velocity.normalize().multiplyScalar(pacmanSpeed * delta);
+        const newPos = pacman.position.clone().add(velocity);
+        if (!checkWallCollision(newPos)) {
+            pacman.position.copy(newPos);
+        }
+        
+        if (cameraMode !== 3) {
+            const angle = Math.atan2(velocity.z, velocity.x);
+            pacman.rotation.y = -angle;
+        }
     }
     
     // update pacman position

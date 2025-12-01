@@ -14,5 +14,16 @@
   },
   "devDependencies": {
     "vite": "^4.5.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/024dsun/3d-pacman.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/024dsun/3d-pacman/issues"
+  },
+  "homepage": "https://github.com/024dsun/3d-pacman#readme"
 }
