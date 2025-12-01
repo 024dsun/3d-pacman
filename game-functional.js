@@ -54,8 +54,8 @@ function init() {
     // scene setup
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x1a1a2e);
-    // fog for horror atmosphere
-    scene.fog = new THREE.Fog(0x1a1a2e, 10, 40);
+    // fog for horror atmosphere - use exponential fog for consistent effect at all distances
+    scene.fog = new THREE.FogExp2(0x1a1a2e, 0.04);
     // camera
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.set(0, 15, 15);
@@ -431,12 +431,24 @@ function update(delta) {
 
 // pacman update
 function updatePacman(delta) {
-    const velocity = new THREE.Vector3(0, 0, 0);
+    let velocity = new THREE.Vector3(0, 0, 0);
     // check valid keys for movement
     if (keys['w'] || keys['arrowup']) velocity.z -= 1;
     if (keys['s'] || keys['arrowdown']) velocity.z += 1;
     if (keys['a'] || keys['arrowleft']) velocity.x -= 1;
     if (keys['d'] || keys['arrowright']) velocity.x += 1;
+    
+    // in first person mode, rotate movement relative to where we're looking
+    if (cameraMode === 3 && velocity.length() > 0) {
+        // rotate velocity by camera yaw so W moves forward relative to view
+        const cos = Math.cos(cameraYaw);
+        const sin = Math.sin(cameraYaw);
+        const rotatedX = velocity.x * cos - velocity.z * sin;
+        const rotatedZ = velocity.x * sin + velocity.z * cos;
+        velocity.x = rotatedX;
+        velocity.z = rotatedZ;
+    }
+    
     // update pacman position
     if (velocity.length() > 0) {
         velocity.normalize().multiplyScalar(pacmanSpeed * delta);
@@ -444,9 +456,15 @@ function updatePacman(delta) {
         if (!checkWallCollision(newPos)) {
             pacman.position.copy(newPos);
         }
-        // rotate to face movement
-        const angle = Math.atan2(velocity.z, velocity.x);
-        pacman.rotation.y = angle;
+        // rotate to face movement direction (only in non-first-person modes)
+        if (cameraMode !== 3) {
+            const angle = Math.atan2(velocity.z, velocity.x);
+            pacman.rotation.y = angle;
+        }
+    }
+    // in first person mode, pacman faces where the mouse is looking
+    if (cameraMode === 3) {
+        pacman.rotation.y = cameraYaw + Math.PI / 2;
     }
     // update light position to follow pacman
     pacmanLight.position.set(pacman.position.x, pacman.position.y + 1, pacman.position.z);
