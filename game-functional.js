@@ -1,13 +1,12 @@
 import * as THREE from 'three';
 
-// this version is the demo version
 // features implemented are as below
 // - maze generation
 // - pacman movement
 // - ghost movement
 // - pellet collection
 // - power-up collection
-// - ghost AI (advanced)
+// - ghost AI (advanced) (not working)
 // - collision detection (advanced)
 // - game over
 // - game win
@@ -31,32 +30,46 @@ let powerUps = [];
 let score = 0;
 let lives = 3;
 let gameOver = false;
+let isPaused = false;
 let powerUpActive = false
 let powerUpTimer = 0;
 let keys = {};
 let hudElement;
+let pacmanLight;
+let gameTime = 0;
+let baseGhostSpeed = 2;
 
 // camera mode: 1 - top down, 2 - third person, 3 - first person, 4 - spectator
-let cameraMode = 2;
+let cameraMode;
+
+// mouse look for first person mode
+let mouseX = 0;
+let mouseY = 0;
+let cameraYaw = 0;
+let cameraPitch = 0;
+let isPointerLocked = false;
 
 // initialize game
 function init() {
     // scene setup
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x1a1a2e);
+    // fog for horror atmosphere
+    scene.fog = new THREE.Fog(0x1a1a2e, 10, 40);
     // camera
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.set(0, 15, 15);
     camera.lookAt(0, 0, 0); 
+    cameraMode = 2;
     // renderer
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
     document.body.appendChild(renderer.domElement);
     // lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    const ambientLight = new THREE.AmbientLight(0x6060a0, 0.5);
     scene.add(ambientLight);
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
     dirLight.position.set(10, 20, 10);
     dirLight.castShadow = true;
     scene.add(dirLight);
@@ -87,7 +100,6 @@ function createMaze() {
     });
     const wallHeight = 2;
     const positions = [];
-    
     // insert walls
     positions.push(
         [0, 0, -14, 30, wallHeight, 1],
@@ -116,7 +128,6 @@ function createMaze() {
         [-4, 0, 10, 8, wallHeight, 1],
         [8, 0, 10, 8, wallHeight, 1]
     );
-    
     // create wall meshes
     positions.forEach(([x, y, z, w, h, d]) => {
         const geometry = new THREE.BoxGeometry(w, h, d);
@@ -156,6 +167,10 @@ function createPacman() {
     const eye = new THREE.Mesh(eyeGeometry, eyeMaterial);
     eye.position.set(0, 0.2, 0.4);
     pacman.add(eye);
+    // point light attached to pacman (flashlight effect)
+    pacmanLight = new THREE.PointLight(0xffff00, 2, 15);
+    pacmanLight.position.set(0, 0.5, 0);
+    scene.add(pacmanLight);
     // add to scene
     scene.add(pacman);
 }
@@ -179,10 +194,10 @@ function createPellets() {
     for (let x = -12; x <= 12; x += 2) {
         for (let z = -12; z <= 12; z += 2) {
             if (Math.abs(x) < 2 && Math.abs(z) < 2) continue;
-            const testPos = new THREE.Vector3(x, 0.5, z);
-            if (!checkWallCollisionSimple(testPos)) {
+            const pos = new THREE.Vector3(x, 0.5, z);
+            if (!checkWallCollisionSimple(pos)) {
                 const pellet = new THREE.Mesh(pelletGeometry, pelletMaterial);
-                pellet.position.set(x, 0.5, z);
+                pellet.position.copy(pos);
                 scene.add(pellet);
                 pellets.push(pellet);
             }
@@ -258,16 +273,50 @@ function setupInput() {
         // camera mode switching (1-4 keys)
         if (pressedKey >= '1' && pressedKey <= '4') {
             cameraMode = parseInt(pressedKey);
+            // request pointer lock for first person mode
+            if (cameraMode === 3) {
+                renderer.domElement.requestPointerLock();
+            } else {
+                document.exitPointerLock();
+            }
+            updateHUD();
+        }
+        // pause game
+        if (e.key === ' ') {
+            e.preventDefault();
+            if (!gameOver) {
+                isPaused = !isPaused;
+                updateHUD();
+            }
         }
         // restart game
         if (pressedKey === 'r' && gameOver) {
             location.reload();
         }
     });
-    
     window.addEventListener('keyup', (e) => {
         let releasedKey = e.key.toLowerCase();
         keys[releasedKey] = false;
+    });
+    // mouse movement for first person camera
+    document.addEventListener('mousemove', (e) => {
+        if (cameraMode === 3 && document.pointerLockElement === renderer.domElement) {
+            const sensitivity = 0.002;
+            cameraYaw -= e.movementX * sensitivity;
+            cameraPitch -= e.movementY * sensitivity;
+            // clamp pitch to avoid flipping
+            cameraPitch = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, cameraPitch));
+        }
+    });
+    // pointer lock change handler
+    document.addEventListener('pointerlockchange', () => {
+        isPointerLocked = document.pointerLockElement === renderer.domElement;
+    });
+    // click to enter first person mode
+    renderer.domElement.addEventListener('click', () => {
+        if (cameraMode === 3 && !isPointerLocked) {
+            renderer.domElement.requestPointerLock();
+        }
     });
 }
 
@@ -290,17 +339,20 @@ function createHUD() {
 // update hud
 function updateHUD() {
     const powerUpText = powerUpActive ? `<br><span style="color: #ff00ff; font-weight: bold;">POWER UP: ${Math.ceil(powerUpTimer)}s</span>` : '';
+    const pauseText = isPaused ? '<br><br><span style="color: #ffff00; font-weight: bold;">PAUSED - Press SPACE to resume</span>' : '';
     let totalPellets = pellets.length + powerUps.length;
     const gameOverText = gameOver && totalPellets !== 0 ? '<br><br><span style="color: #ff0000;">GAME OVER! Press R to restart</span>' : '';
     const winText = gameOver && totalPellets === 0 ? '<br><br><span style="color: #00ff00;">YOU WIN! Press R to restart</span>' : '';
     const cameraNames = ['', 'Top-Down', 'Third-Person', 'First-Person', 'Spectator'];
-    const cameraText = `<br><span style="color: #888;">Camera: ${cameraNames[cameraMode]} (1-4)</span>`;
+    const cameraText = `<br><span style="color: #888;">Camera: ${cameraNames[cameraMode]} (1-4) | SPACE to pause</span>`;
+    const timeText = `<br><span style="color: #888;">Time: ${Math.floor(gameTime)}s</span>`;
+    const fpText = cameraMode === 3 ? '<br><span style="color: #88ff88;">Click to enable mouse look | ESC to exit</span>' : '';
     hudElement.innerHTML = `
         Score: ${score}<br>
-        Lives: ${lives}${cameraText}<br>
+        Lives: ${lives}${cameraText}${timeText}<br>
         Pellets: ${pellets.length}<br>
         Power Ups: ${powerUps.length}<br>
-        WASD/arrow keys to move${powerUpText}${gameOverText}${winText}
+        WASD/arrow keys to move${fpText}${powerUpText}${pauseText}${gameOverText}${winText}
     `;
 }
 
@@ -336,6 +388,17 @@ function update(delta) {
         updateHUD();
         return;
     }
+    // handle pause
+    if (isPaused) {
+        return;
+    }
+    // track game time and scale difficulty
+    gameTime += delta;
+    // ghosts speed up 5% every 30 seconds
+    const speedMultiplier = 1 + Math.floor(gameTime / 30) * 0.05;
+    ghosts.forEach(ghost => {
+        ghost.speed = baseGhostSpeed * speedMultiplier;
+    });
     // check win condition - all pellets collected
     if (pellets.length === 0 && powerUps.length === 0) {
         gameOver = true;
@@ -360,6 +423,10 @@ function update(delta) {
     animatePellets();
     animatePowerUps(delta);
     updateCamera();
+    // update HUD periodically (every frame for time display)
+    if (Math.floor(gameTime) !== Math.floor(gameTime - delta)) {
+        updateHUD();
+    }
 }
 
 // pacman update
@@ -380,11 +447,9 @@ function updatePacman(delta) {
         // rotate to face movement
         const angle = Math.atan2(velocity.z, velocity.x);
         pacman.rotation.y = angle;
-        // TODO: mouth animation
-        // pacmanMouthAngle += delta * 8;
-        // const mouthScale = 1 + Math.sin(pacmanMouthAngle) * 0.1;
-        // pacman.scale.set(mouthScale, 1, 1);
     }
+    // update light position to follow pacman
+    pacmanLight.position.set(pacman.position.x, pacman.position.y + 1, pacman.position.z);
 }
 
 // collect pellets
@@ -483,6 +548,18 @@ function updateGhosts(delta) {
             ghost.respawnTime -= delta;
             if (ghost.respawnTime < 0) ghost.respawnTime = 0;
         }
+        // hide ghosts until they're close (horror effect)
+        const distToPacman = ghost.mesh.position.distanceTo(pacman.position);
+        const visibilityRange = 7;
+        if (distToPacman > visibilityRange) {
+            ghost.mesh.visible = false;
+        } else {
+            ghost.mesh.visible = true;
+            // fade in based on distance
+            const opacity = 1 - (distToPacman / visibilityRange) * 0.5;
+            ghost.mesh.material.opacity = opacity;
+            ghost.mesh.material.transparent = true;
+        }
         // change color
         if (ghost.respawnTime && ghost.respawnTime > 0) {
             const flash = Math.sin(Date.now() * 0.02) > 0;
@@ -534,7 +611,6 @@ function updateGhosts(delta) {
                         0,
                         (Math.random() - 0.5) * 2
                     ).normalize().multiplyScalar(ghost.speed * delta);
-                    
                     const randomPos = ghost.mesh.position.clone().add(randomDir);
                     if (!checkWallCollision(randomPos, 0.5)) {
                         ghost.mesh.position.copy(randomPos);
@@ -581,18 +657,17 @@ function updateCamera() {
             camera.position.z = pacPos.z + 15;
             camera.lookAt(pacPos.x, 0, pacPos.z);
             break;
-        // first person
+        // first person with mouse look
         case 3:
-            camera.position.set(pacPos.x, 2, pacPos.z);
-            const lookDir = new THREE.Vector3(
-                Math.cos(pacman.rotation.y),
-                0,
-                Math.sin(pacman.rotation.y)
-            );
+            camera.position.set(pacPos.x, 1.5, pacPos.z);
+            // use mouse yaw/pitch for camera direction
+            const lookX = Math.cos(cameraYaw) * Math.cos(cameraPitch);
+            const lookY = Math.sin(cameraPitch);
+            const lookZ = Math.sin(cameraYaw) * Math.cos(cameraPitch);
             camera.lookAt(
-                pacPos.x + lookDir.x * 2,
-                1,
-                pacPos.z + lookDir.z * 2
+                pacPos.x + lookX,
+                1.5 + lookY,
+                pacPos.z + lookZ
             );
             break;
         // spectator (static overview)
