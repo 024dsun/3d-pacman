@@ -46,6 +46,7 @@ let gameOver = false;
 let isPaused = false;
 let powerUpActive = false
 let powerUpTimer = 0;
+let ghostMultiplier = 1; // Multiplier for eating ghosts (200, 400, 800, 1600)
 let keys = {};
 let hudElement;
 let pacmanLight;
@@ -662,7 +663,8 @@ function createHUD() {
 
 // update hud
 function updateHUD() {
-    const powerUpText = powerUpActive ? `<br><span style="color: #ff00ff; font-weight: bold;">POWER UP: ${Math.ceil(powerUpTimer)}s</span>` : '';
+    const multiplierText = ghostMultiplier > 1 ? ` (x${ghostMultiplier} next ghost!)` : '';
+    const powerUpText = powerUpActive ? `<br><span style="color: #ff00ff; font-weight: bold;">POWER UP: ${Math.ceil(powerUpTimer)}s${multiplierText}</span>` : '';
     
     // Level names for flavor
     const levelNames = ['The Beginning', 'Corridor Chaos', 'Winding Nightmare'];
@@ -753,6 +755,7 @@ function update(delta) {
         if (powerUpTimer <= 0) {
             powerUpActive = false;
             powerUpTimer = 0;
+            ghostMultiplier = 1; // Reset multiplier when power-up ends
         }
         updateHUD();
     }
@@ -842,6 +845,7 @@ function checkPowerUpCollection() {
             score += 50;
             powerUpActive = true;
             powerUpTimer = 10;
+            ghostMultiplier = 1; // Reset multiplier for new power-up
             // reset ghost after getting hit by pacman with powerup
             ghosts.forEach(ghost => {
                 ghost.immuneToPowerUp = false;
@@ -859,7 +863,9 @@ function checkGhostCollisions() {
             const ghostVulnerable = powerUpActive && !ghost.immuneToPowerUp;
             // eat the ghost
             if (ghostVulnerable) {
-                score += 200;
+                const points = 200 * ghostMultiplier;
+                score += points;
+                ghostMultiplier *= 2; // Double for next ghost (200 -> 400 -> 800 -> 1600)
                 ghost.mesh.position.set(...ghost.startPosition);
                 ghost.immuneToPowerUp = true;
                 ghost.respawnTime = 1.0;
@@ -1038,32 +1044,75 @@ function updateGhosts(delta) {
         newPos.z = Math.max(-13, Math.min(13, newPos.z));
         
         // Try to move, with wall sliding fallback
+        let moved = false;
         if (!checkWallCollision(newPos, 0.5)) {
             ghost.mesh.position.copy(newPos);
+            moved = true;
         } else {
-            // Try sliding along X axis
+            // Try sliding along X axis only
             const slideX = ghost.mesh.position.clone();
             slideX.x += movement.x;
             if (!checkWallCollision(slideX, 0.5)) {
                 ghost.mesh.position.copy(slideX);
+                moved = true;
             } else {
-                // Try sliding along Z axis
+                // Try sliding along Z axis only
                 const slideZ = ghost.mesh.position.clone();
                 slideZ.z += movement.z;
                 if (!checkWallCollision(slideZ, 0.5)) {
                     ghost.mesh.position.copy(slideZ);
-                } else {
-                    // Random movement to get unstuck
-                    const randomDir = new THREE.Vector3(
-                        (Math.random() - 0.5) * 2,
-                        0,
-                        (Math.random() - 0.5) * 2
-                    ).normalize().multiplyScalar(ghost.speed * delta);
-                    const randomPos = ghost.mesh.position.clone().add(randomDir);
-                    if (!checkWallCollision(randomPos, 0.5)) {
-                        ghost.mesh.position.copy(randomPos);
+                    moved = true;
+                }
+            }
+        }
+        
+        // Track stuck time
+        if (!ghost.stuckTime) ghost.stuckTime = 0;
+        if (!moved) {
+            ghost.stuckTime += delta;
+        } else {
+            ghost.stuckTime = 0;
+        }
+        
+        // If stuck for too long, try all 4 cardinal directions
+        if (ghost.stuckTime > 0.3) {
+            const cardinalDirs = [
+                new THREE.Vector3(1, 0, 0),
+                new THREE.Vector3(-1, 0, 0),
+                new THREE.Vector3(0, 0, 1),
+                new THREE.Vector3(0, 0, -1)
+            ];
+            // Shuffle to add randomness
+            for (let i = cardinalDirs.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [cardinalDirs[i], cardinalDirs[j]] = [cardinalDirs[j], cardinalDirs[i]];
+            }
+            for (let dir of cardinalDirs) {
+                const escapePos = ghost.mesh.position.clone().add(dir.multiplyScalar(ghost.speed * delta * 2));
+                if (!checkWallCollision(escapePos, 0.5)) {
+                    ghost.mesh.position.copy(escapePos);
+                    ghost.stuckTime = 0;
+                    break;
+                }
+            }
+        }
+        
+        // If still stuck after 1 second, teleport to a valid nearby position
+        if (ghost.stuckTime > 1.0) {
+            for (let radius = 1; radius <= 4; radius++) {
+                for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 4) {
+                    const escapePos = new THREE.Vector3(
+                        ghost.mesh.position.x + Math.cos(angle) * radius,
+                        0.5,
+                        ghost.mesh.position.z + Math.sin(angle) * radius
+                    );
+                    if (!checkWallCollision(escapePos, 0.5)) {
+                        ghost.mesh.position.copy(escapePos);
+                        ghost.stuckTime = 0;
+                        break;
                     }
                 }
+                if (ghost.stuckTime === 0) break;
             }
         }
         
