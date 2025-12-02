@@ -44,6 +44,7 @@ let lives = 3;
 let currentLevel = 1;
 let gameOver = false;
 let isPaused = false;
+let gameStarted = false; // Track if game has started
 let powerUpActive = false
 let powerUpTimer = 0;
 let ghostMultiplier = 1; // Multiplier for eating ghosts (200, 400, 800, 1600)
@@ -70,8 +71,8 @@ function init() {
     // scene setup
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x1a1a2e);
-    // fog for horror atmosphere - use exponential fog for consistent effect at all distances
-    scene.fog = new THREE.FogExp2(0x1a1a2e, 0.04);
+    // fog for horror atmosphere - use linear fog for better control
+    scene.fog = new THREE.Fog(0x1a1a2e, 5, 50);
     // camera
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.set(0, 15, 15);
@@ -107,6 +108,8 @@ function init() {
     createGhosts();
     setupInput();
     createHUD();
+    createStartScreen();
+    showStartScreen();
     window.addEventListener('resize', onWindowResize);
     clock = new THREE.Clock();
 }
@@ -645,6 +648,114 @@ function setupInput() {
     });
 }
 
+// start screen
+let startScreen;
+function createStartScreen() {
+    startScreen = document.createElement('div');
+    startScreen.style.position = 'absolute';
+    startScreen.style.top = '0';
+    startScreen.style.left = '0';
+    startScreen.style.width = '100%';
+    startScreen.style.height = '100%';
+    startScreen.style.display = 'flex';
+    startScreen.style.flexDirection = 'column';
+    startScreen.style.justifyContent = 'center';
+    startScreen.style.alignItems = 'center';
+    startScreen.style.background = 'rgba(0, 0, 0, 0.85)';
+    startScreen.style.color = 'white';
+    startScreen.style.fontFamily = 'monospace';
+    startScreen.style.zIndex = '1000';
+    startScreen.innerHTML = `
+        <h1 style="font-size: 64px; color: #ffff00; text-shadow: 0 0 20px #ffff00; margin-bottom: 20px;">
+            👻 3D PAC-MAN 👻
+        </h1>
+        <p style="font-size: 24px; color: #00ffff; margin-bottom: 10px;">A Horror Experience</p>
+        <div style="font-size: 18px; color: #aaa; margin: 30px 0; text-align: center; line-height: 1.8;">
+            <p><strong style="color: #fff;">WASD / Arrow Keys</strong> - Move Pac-Man</p>
+            <p><strong style="color: #fff;">1-4</strong> - Change Camera Mode</p>
+            <p><strong style="color: #fff;">SPACE</strong> - Pause Game</p>
+            <p><strong style="color: #fff;">R</strong> - Restart Game</p>
+        </div>
+        <p style="font-size: 16px; color: #ff00ff; margin-bottom: 30px;">Eat all pellets. Avoid ghosts. Collect power-ups to eat them!</p>
+        <button id="startButton" style="
+            font-size: 32px;
+            padding: 20px 60px;
+            background: #ffff00;
+            color: #000;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-family: monospace;
+            font-weight: bold;
+            transition: all 0.2s;
+        ">START GAME</button>
+        <p style="font-size: 14px; color: #666; margin-top: 40px;">Press ENTER or click to start</p>
+    `;
+    document.body.appendChild(startScreen);
+    
+    // Button hover effect
+    const btn = document.getElementById('startButton');
+    btn.onmouseover = () => { btn.style.background = '#00ff00'; btn.style.transform = 'scale(1.1)'; };
+    btn.onmouseout = () => { btn.style.background = '#ffff00'; btn.style.transform = 'scale(1)'; };
+    btn.onclick = startGame;
+    
+    // Also start on Enter key
+    document.addEventListener('keydown', function onEnter(e) {
+        if ((e.key === 'Enter' || e.key === ' ') && !gameStarted) {
+            startGame();
+        }
+    });
+}
+
+function showStartScreen(isGameOver = false) {
+    if (!startScreen) createStartScreen();
+    startScreen.style.display = 'flex';
+    
+    // Update text if game over
+    if (isGameOver) {
+        startScreen.querySelector('h1').innerHTML = '👻 GAME OVER 👻';
+        startScreen.querySelector('h1').style.color = '#ff0000';
+        startScreen.querySelector('p').textContent = `Final Score: ${score}`;
+        document.getElementById('startButton').textContent = 'PLAY AGAIN';
+    } else {
+        startScreen.querySelector('h1').innerHTML = '👻 3D PAC-MAN 👻';
+        startScreen.querySelector('h1').style.color = '#ffff00';
+        document.getElementById('startButton').textContent = 'START GAME';
+    }
+}
+
+function hideStartScreen() {
+    if (startScreen) {
+        startScreen.style.display = 'none';
+    }
+}
+
+function startGame() {
+    hideStartScreen();
+    gameStarted = true;
+    gameOver = false;
+    score = 0;
+    lives = 3;
+    currentLevel = 1;
+    gameTime = 0;
+    powerUpActive = false;
+    powerUpTimer = 0;
+    ghostMultiplier = 1;
+    
+    // Reset positions
+    pacman.position.set(0, 0.5, 0);
+    pacman.rotation.y = 0;
+    ghosts.forEach(ghost => {
+        ghost.mesh.position.set(...ghost.startPosition);
+        ghost.stuckTime = 0;
+        ghost.nextWaypoint = null;
+        ghost.respawnTime = 0;
+        ghost.immuneToPowerUp = false;
+    });
+    
+    updateHUD();
+}
+
 // hud
 function createHUD() {
     hudElement = document.createElement('div');
@@ -722,6 +833,10 @@ function checkWallCollisionSimple(position) {
 
 // game update loop
 function update(delta) {
+    // Don't update if game hasn't started
+    if (!gameStarted) {
+        return;
+    }
     if (gameOver) {
         updateHUD();
         return;
@@ -877,6 +992,8 @@ function checkGhostCollisions() {
                     lives--;
                     if (lives <= 0) {
                         gameOver = true;
+                        gameStarted = false;
+                        showStartScreen(true); // Show game over screen
                         updateHUD();
                     } else {
                         resetLevel();
@@ -985,7 +1102,42 @@ function advanceLevel() {
     }, 3000);
 }
 
-// ghost update - simple and reliable
+// Find best direction for ghost - picks direction that gets closest to target
+function findBestDirection(ghostPos, targetPos, isChasing) {
+    const dirs = [
+        new THREE.Vector3(1, 0, 0),
+        new THREE.Vector3(-1, 0, 0),
+        new THREE.Vector3(0, 0, 1),
+        new THREE.Vector3(0, 0, -1)
+    ];
+    
+    let bestDir = null;
+    let bestScore = isChasing ? Infinity : -Infinity;
+    
+    for (let dir of dirs) {
+        const testPos = ghostPos.clone().add(dir.clone().multiplyScalar(0.5));
+        if (!checkWallCollision(testPos, 0.4)) {
+            const dist = testPos.distanceTo(targetPos);
+            if (isChasing) {
+                // Chasing: prefer closer distance
+                if (dist < bestScore) {
+                    bestScore = dist;
+                    bestDir = dir.clone();
+                }
+            } else {
+                // Fleeing: prefer farther distance
+                if (dist > bestScore) {
+                    bestScore = dist;
+                    bestDir = dir.clone();
+                }
+            }
+        }
+    }
+    
+    return bestDir;
+}
+
+// Ghost update - simple greedy approach
 function updateGhosts(delta) {
     ghosts.forEach((ghost, index) => {
         // update respawn timer
@@ -1019,100 +1171,44 @@ function updateGhosts(delta) {
             ghost.mesh.material.emissive.setHex(ghost.color);
         }
         
-        // Determine direction based on vulnerability
-        let direction;
+        // Determine if chasing or fleeing
         const isVulnerable = powerUpActive && !ghost.immuneToPowerUp;
+        const isChasing = !isVulnerable || ghost.respawnTime > 0;
         
-        if (isVulnerable && ghost.respawnTime <= 0) {
-            // Run away from Pacman
-            direction = new THREE.Vector3()
-                .subVectors(ghost.mesh.position, pacman.position)
-                .normalize();
-        } else {
-            // Chase Pacman
-            direction = new THREE.Vector3()
-                .subVectors(pacman.position, ghost.mesh.position)
-                .normalize();
-        }
+        // Find best direction
+        const bestDir = findBestDirection(ghost.mesh.position, pacman.position, isChasing);
         
-        // Calculate movement
-        const movement = direction.clone().multiplyScalar(ghost.speed * delta);
-        const newPos = ghost.mesh.position.clone().add(movement);
-        
-        // Keep within bounds
-        newPos.x = Math.max(-13, Math.min(13, newPos.x));
-        newPos.z = Math.max(-13, Math.min(13, newPos.z));
-        
-        // Try to move, with wall sliding fallback
         let moved = false;
-        if (!checkWallCollision(newPos, 0.5)) {
-            ghost.mesh.position.copy(newPos);
-            moved = true;
-        } else {
-            // Try sliding along X axis only
-            const slideX = ghost.mesh.position.clone();
-            slideX.x += movement.x;
-            if (!checkWallCollision(slideX, 0.5)) {
-                ghost.mesh.position.copy(slideX);
+        if (bestDir) {
+            const movement = bestDir.multiplyScalar(ghost.speed * delta);
+            const newPos = ghost.mesh.position.clone().add(movement);
+            
+            // Keep within bounds
+            newPos.x = Math.max(-13, Math.min(13, newPos.x));
+            newPos.z = Math.max(-13, Math.min(13, newPos.z));
+            
+            if (!checkWallCollision(newPos, 0.4)) {
+                ghost.mesh.position.copy(newPos);
                 moved = true;
-            } else {
-                // Try sliding along Z axis only
-                const slideZ = ghost.mesh.position.clone();
-                slideZ.z += movement.z;
-                if (!checkWallCollision(slideZ, 0.5)) {
-                    ghost.mesh.position.copy(slideZ);
-                    moved = true;
-                }
             }
         }
         
-        // Track stuck time
-        if (!ghost.stuckTime) ghost.stuckTime = 0;
+        // If no best direction found, try any valid direction
         if (!moved) {
-            ghost.stuckTime += delta;
-        } else {
-            ghost.stuckTime = 0;
-        }
-        
-        // If stuck for too long, try all 4 cardinal directions
-        if (ghost.stuckTime > 0.3) {
-            const cardinalDirs = [
+            const dirs = [
                 new THREE.Vector3(1, 0, 0),
                 new THREE.Vector3(-1, 0, 0),
                 new THREE.Vector3(0, 0, 1),
                 new THREE.Vector3(0, 0, -1)
-            ];
-            // Shuffle to add randomness
-            for (let i = cardinalDirs.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [cardinalDirs[i], cardinalDirs[j]] = [cardinalDirs[j], cardinalDirs[i]];
-            }
-            for (let dir of cardinalDirs) {
-                const escapePos = ghost.mesh.position.clone().add(dir.multiplyScalar(ghost.speed * delta * 2));
-                if (!checkWallCollision(escapePos, 0.5)) {
-                    ghost.mesh.position.copy(escapePos);
-                    ghost.stuckTime = 0;
+            ].sort(() => Math.random() - 0.5);
+            
+            for (let dir of dirs) {
+                const testPos = ghost.mesh.position.clone().add(dir.clone().multiplyScalar(ghost.speed * delta));
+                if (!checkWallCollision(testPos, 0.4)) {
+                    ghost.mesh.position.copy(testPos);
+                    moved = true;
                     break;
                 }
-            }
-        }
-        
-        // If still stuck after 1 second, teleport to a valid nearby position
-        if (ghost.stuckTime > 1.0) {
-            for (let radius = 1; radius <= 4; radius++) {
-                for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 4) {
-                    const escapePos = new THREE.Vector3(
-                        ghost.mesh.position.x + Math.cos(angle) * radius,
-                        0.5,
-                        ghost.mesh.position.z + Math.sin(angle) * radius
-                    );
-                    if (!checkWallCollision(escapePos, 0.5)) {
-                        ghost.mesh.position.copy(escapePos);
-                        ghost.stuckTime = 0;
-                        break;
-                    }
-                }
-                if (ghost.stuckTime === 0) break;
             }
         }
         
@@ -1147,6 +1243,8 @@ function updateCamera() {
         case 1:
             camera.position.set(pacPos.x, 30, pacPos.z);
             camera.lookAt(pacPos.x, 0, pacPos.z);
+            scene.fog.near = 15;
+            scene.fog.far = 60;
             break;
         // third person (following pacman)
         case 2:
@@ -1154,6 +1252,8 @@ function updateCamera() {
             camera.position.y = 15;
             camera.position.z = pacPos.z + 15;
             camera.lookAt(pacPos.x, 0, pacPos.z);
+            scene.fog.near = 5;
+            scene.fog.far = 40;
             break;
         // first person with mouse look
         case 3:
@@ -1167,17 +1267,23 @@ function updateCamera() {
                 1.5 + lookY,
                 pacPos.z + lookZ
             );
+            scene.fog.near = 2;
+            scene.fog.far = 20;
             break;
         // spectator (static overview)
         case 4:
             camera.position.set(0, 40, 20);
             camera.lookAt(0, 0, 0);
+            scene.fog.near = 25;
+            scene.fog.far = 80;
             break;
         // default mode 2
         default:
             camera.position.x = pacPos.x;
             camera.position.z = pacPos.z + 15;
             camera.lookAt(pacPos.x, 0, pacPos.z);
+            scene.fog.near = 5;
+            scene.fog.far = 40;
     }
 }
 
