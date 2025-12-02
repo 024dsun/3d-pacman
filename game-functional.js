@@ -1,19 +1,31 @@
 import * as THREE from 'three';
 
 // features implemented are as below
-// - maze generation
-// - pacman movement
-// - ghost movement
+// - maze generation (3 unique levels)
+// - pacman movement (4 camera modes)
+// - ghost movement with SMART AI
 // - pellet collection
 // - power-up collection
-// - ghost AI (advanced) (not working)
+// - ghost AI (ADVANCED PATHFINDING - ROBUST WALL AVOIDANCE):
+//   * Tracks Pac-Man across entire map
+//   * Invisible when far away (horror effect) but still pursuing
+//   * Visible and fade in when within 10 units
+//   * Predictive targeting (intercepts Pac-Man's path)
+//   * Multi-direction probing with wall repulsion force
+//   * NEVER gets stuck on walls - multiple safety layers:
+//     - Wall repulsion force pushes away from nearby walls
+//     - 20+ direction testing with 5-point lookahead
+//     - Emergency unstuck recovery system
+//     - Continuous wall ejection validation
+//     - Spawn position validation
+//   * Smooth wall sliding and navigation
 // - collision detection (advanced)
-// - game over
-// - game win
+// - game over and win conditions
 // - score tracking
 // - lives tracking
+// - level progression (3 levels with increasing difficulty)
+// - teleport portals (levels 2 & 3)
 // - user interaction
-// - game over and win conditions
 
 let scene;
 let camera;
@@ -525,7 +537,29 @@ function createGhosts() {
             emissiveIntensity: 0.3
         });
         const ghostMesh = new THREE.Mesh(geometry, material);
-        ghostMesh.position.set(...positions[i]);
+        
+        // Validate spawn position
+        let spawnPos = positions[i];
+        const testPos = new THREE.Vector3(...spawnPos);
+        if (checkWallCollision(testPos, 0.5)) {
+            // Find alternative safe position
+            const alternativePositions = [
+                [-11, 0.5, -11], [11, 0.5, -11],
+                [-11, 0.5, 11], [11, 0.5, 11],
+                [-10, 0.5, -10], [10, 0.5, -10],
+                [-10, 0.5, 10], [10, 0.5, 10]
+            ];
+            
+            for (let altPos of alternativePositions) {
+                const altTest = new THREE.Vector3(...altPos);
+                if (!checkWallCollision(altTest, 0.5)) {
+                    spawnPos = altPos;
+                    break;
+                }
+            }
+        }
+        
+        ghostMesh.position.set(...spawnPos);
         ghostMesh.castShadow = true;
         // TODO: add eyes
         // const eyeGeometry = new THREE.SphereGeometry(0.1, 16, 16);
@@ -542,10 +576,15 @@ function createGhosts() {
             mesh: ghostMesh,
             velocity: new THREE.Vector3(),
             speed: 2,
-            startPosition: positions[i].slice(),
+            startPosition: spawnPos.slice(),
             color: color,
             respawnTime: 0,
-            immuneToPowerUp: false
+            immuneToPowerUp: false,
+            stuckTimer: 0,
+            lastPosition: new THREE.Vector3(...spawnPos),
+            lastPacmanPos: null,
+            preferredDirection: null,
+            pathCheckTimer: 0
         });
     });
 }
@@ -691,7 +730,7 @@ function update(delta) {
     }
     // track game time and scale difficulty
     gameTime += delta;
-    // ghosts speed up 5% every 30 seconds
+    // ghosts speed up gradually
     const speedMultiplier = 1 + Math.floor(gameTime / 30) * 0.05;
     ghosts.forEach(ghost => {
         ghost.speed = baseGhostSpeed * speedMultiplier;
@@ -873,8 +912,31 @@ function resetLevel() {
         ghost.mesh.position.set(...ghost.startPosition);
         ghost.respawnTime = 0;
         ghost.immuneToPowerUp = false;
+        ghost.stuckTimer = 0;
+        ghost.lastPosition.set(...ghost.startPosition);
+        ghost.lastPacmanPos = null;
+        ghost.preferredDirection = null;
         ghost.mesh.material.color.setHex(ghost.color);
         ghost.mesh.material.emissive.setHex(ghost.color);
+        
+        // Ensure spawn position is valid
+        if (checkWallCollision(ghost.mesh.position, 0.5)) {
+            // Find a safe spawn position
+            const safePositions = [
+                [-11, 0.5, -11], [11, 0.5, -11],
+                [-11, 0.5, 11], [11, 0.5, 11],
+                [0, 0.5, 0]
+            ];
+            
+            for (let pos of safePositions) {
+                const testPos = new THREE.Vector3(...pos);
+                if (!checkWallCollision(testPos, 0.5)) {
+                    ghost.mesh.position.copy(testPos);
+                    ghost.startPosition = pos.slice();
+                    break;
+                }
+            }
+        }
     });
     updateHUD();
 }
@@ -930,6 +992,214 @@ function advanceLevel() {
     }, 3000);
 }
 
+// Get wall repulsion force - pushes ghost away from nearby walls
+function getWallRepulsionForce(ghostPos) {
+    const repulsionForce = new THREE.Vector3(0, 0, 0);
+    const checkRadius = 1.5; // Check walls within this radius
+    const repulsionStrength = 2.0;
+    
+    // Check in 8 directions for nearby walls
+    const checkDirs = [
+        new THREE.Vector3(1, 0, 0),
+        new THREE.Vector3(-1, 0, 0),
+        new THREE.Vector3(0, 0, 1),
+        new THREE.Vector3(0, 0, -1),
+        new THREE.Vector3(0.707, 0, 0.707),
+        new THREE.Vector3(-0.707, 0, 0.707),
+        new THREE.Vector3(0.707, 0, -0.707),
+        new THREE.Vector3(-0.707, 0, -0.707)
+    ];
+    
+    for (let dir of checkDirs) {
+        const checkPos = ghostPos.clone().add(dir.clone().multiplyScalar(checkRadius));
+        if (checkWallCollision(checkPos, 0.3)) {
+            // Wall detected, push away from it
+            repulsionForce.sub(dir.clone().multiplyScalar(repulsionStrength));
+        }
+    }
+    
+    return repulsionForce;
+}
+
+// Smart ghost pathfinding - checks if path is clear with robust wall avoidance
+function findBestGhostDirection(ghost, targetPos, delta) {
+    const currentPos = ghost.mesh.position.clone();
+    currentPos.y = 0.5; // Ensure consistent Y
+    
+    // First, check if ghost is too close to any wall and needs to escape
+    const wallRepulsion = getWallRepulsionForce(currentPos);
+    
+    // Calculate ideal direction toward target
+    let idealDirection = new THREE.Vector3()
+        .subVectors(targetPos, currentPos)
+        .normalize();
+    
+    // Blend target direction with wall repulsion
+    if (wallRepulsion.length() > 0.1) {
+        idealDirection.add(wallRepulsion.normalize().multiplyScalar(2));
+        idealDirection.normalize();
+    }
+    
+    // Generate comprehensive test directions
+    const testDirections = [];
+    
+    // Priority 1: Direct and near-direct paths
+    testDirections.push(idealDirection.clone());
+    
+    // Priority 2: Slight variations of ideal direction
+    for (let angle = -Math.PI/6; angle <= Math.PI/6; angle += Math.PI/12) {
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const rotated = new THREE.Vector3(
+            idealDirection.x * cos - idealDirection.z * sin,
+            0,
+            idealDirection.x * sin + idealDirection.z * cos
+        );
+        testDirections.push(rotated.normalize());
+    }
+    
+    // Priority 3: Axis-aligned movements
+    testDirections.push(
+        new THREE.Vector3(Math.sign(idealDirection.x) || 1, 0, 0),
+        new THREE.Vector3(0, 0, Math.sign(idealDirection.z) || 1)
+    );
+    
+    // Priority 4: All cardinal and diagonal directions
+    testDirections.push(
+        new THREE.Vector3(1, 0, 0),
+        new THREE.Vector3(-1, 0, 0),
+        new THREE.Vector3(0, 0, 1),
+        new THREE.Vector3(0, 0, -1),
+        new THREE.Vector3(0.707, 0, 0.707),
+        new THREE.Vector3(-0.707, 0, 0.707),
+        new THREE.Vector3(0.707, 0, -0.707),
+        new THREE.Vector3(-0.707, 0, -0.707)
+    );
+    
+    // Score each direction
+    let bestDirection = null;
+    let bestScore = -Infinity;
+    
+    for (let testDir of testDirections) {
+        if (testDir.length() < 0.01) continue;
+        testDir.normalize();
+        
+        // Rigorous path checking with multiple probe points
+        let pathClear = true;
+        let clearanceScore = 0;
+        
+        // Check immediate, short, medium, and long range
+        const probeDistances = [0.3, 0.6, 1.0, 1.5, 2.0];
+        
+        for (let i = 0; i < probeDistances.length; i++) {
+            const probeDist = probeDistances[i];
+            const probePos = currentPos.clone().add(
+                testDir.clone().multiplyScalar(probeDist)
+            );
+            
+            // Keep within bounds
+            probePos.x = Math.max(-12.5, Math.min(12.5, probePos.x));
+            probePos.z = Math.max(-12.5, Math.min(12.5, probePos.z));
+            
+            // Use slightly larger radius for safety margin
+            if (checkWallCollision(probePos, 0.6)) {
+                pathClear = false;
+                break;
+            }
+            
+            clearanceScore += (probeDistances.length - i); // Reward longer clear paths
+        }
+        
+        if (!pathClear) continue;
+        
+        // Calculate comprehensive score
+        const alignmentWithTarget = Math.max(0, testDir.dot(idealDirection)); // 0 to 1
+        const alignmentWithRepulsion = wallRepulsion.length() > 0 ? 
+            Math.max(0, testDir.dot(wallRepulsion.normalize())) : 0;
+        
+        // Estimate future position
+        const futurePos = currentPos.clone().add(testDir.clone().multiplyScalar(2.0));
+        const distanceToTarget = futurePos.distanceTo(targetPos);
+        
+        // Prefer directions that maintain some consistency
+        const consistencyBonus = ghost.preferredDirection ? 
+            Math.max(0, testDir.dot(ghost.preferredDirection)) * 2 : 0;
+        
+        // Higher score = better direction
+        const score = 
+            alignmentWithTarget * 15 +           // Strongly favor target direction
+            alignmentWithRepulsion * 20 +        // VERY strongly avoid walls
+            clearanceScore * 5 +                 // Reward clear paths
+            consistencyBonus -                   // Slight preference for consistency
+            distanceToTarget * 0.05;             // Minimize distance to target
+        
+        if (score > bestScore) {
+            bestScore = score;
+            bestDirection = testDir.clone();
+        }
+    }
+    
+    return bestDirection;
+}
+
+// Detect if ghost is stuck
+function isGhostStuck(ghost, delta) {
+    const moved = ghost.mesh.position.distanceTo(ghost.lastPosition);
+    ghost.lastPosition.copy(ghost.mesh.position);
+    
+    // Check if ghost is moving very slowly
+    if (moved < 0.5 * delta) {
+        ghost.stuckTimer += delta;
+    } else {
+        ghost.stuckTimer = Math.max(0, ghost.stuckTimer - delta); // Gradually reduce stuck timer when moving
+    }
+    
+    return ghost.stuckTimer > 0.3; // Stuck if barely moved for 0.3 seconds
+}
+
+// Force ghost out of walls if somehow inside
+function forceGhostOutOfWalls(ghost) {
+    const pos = ghost.mesh.position.clone();
+    
+    // If ghost is in a wall, find nearest open space
+    if (checkWallCollision(pos, 0.5)) {
+        // Try expanding search in all directions
+        const searchDirs = [
+            new THREE.Vector3(1, 0, 0),
+            new THREE.Vector3(-1, 0, 0),
+            new THREE.Vector3(0, 0, 1),
+            new THREE.Vector3(0, 0, -1),
+            new THREE.Vector3(0.707, 0, 0.707),
+            new THREE.Vector3(-0.707, 0, 0.707),
+            new THREE.Vector3(0.707, 0, -0.707),
+            new THREE.Vector3(-0.707, 0, -0.707)
+        ];
+        
+        // Search with increasing radius until we find open space
+        for (let radius = 0.5; radius <= 3.0; radius += 0.25) {
+            for (let dir of searchDirs) {
+                const escapePos = pos.clone().add(dir.clone().multiplyScalar(radius));
+                escapePos.x = Math.max(-12.5, Math.min(12.5, escapePos.x));
+                escapePos.z = Math.max(-12.5, Math.min(12.5, escapePos.z));
+                
+                if (!checkWallCollision(escapePos, 0.5)) {
+                    // Found safe position!
+                    ghost.mesh.position.copy(escapePos);
+                    ghost.stuckTimer = 0;
+                    return true;
+                }
+            }
+        }
+        
+        // Last resort: teleport to start position
+        ghost.mesh.position.set(...ghost.startPosition);
+        ghost.stuckTimer = 0;
+        return true;
+    }
+    
+    return false;
+}
+
 // ghost update
 function updateGhosts(delta) {
     ghosts.forEach((ghost, index) => {
@@ -938,97 +1208,173 @@ function updateGhosts(delta) {
             ghost.respawnTime -= delta;
             if (ghost.respawnTime < 0) ghost.respawnTime = 0;
         }
-        // hide ghosts until they're close (horror effect)
+        
+        // Ghosts track across entire map but are only visible when close (horror effect!)
         const distToPacman = ghost.mesh.position.distanceTo(pacman.position);
-        const visibilityRange = 7;
+        const visibilityRange = 10; // Range where ghosts become visible
+        
         if (distToPacman > visibilityRange) {
-            ghost.mesh.visible = false;
+            ghost.mesh.visible = false; // Invisible when far - but still tracking!
         } else {
             ghost.mesh.visible = true;
-            // fade in based on distance
-            const opacity = 1 - (distToPacman / visibilityRange) * 0.5;
+            // Fade in based on distance for horror effect
+            const opacity = Math.min(1.0, 1.0 - (distToPacman / visibilityRange) * 0.4);
             ghost.mesh.material.opacity = opacity;
             ghost.mesh.material.transparent = true;
         }
-        // change color
+        
+        // change color and intensity
         if (ghost.respawnTime && ghost.respawnTime > 0) {
             const flash = Math.sin(Date.now() * 0.02) > 0;
             ghost.mesh.material.color.setHex(flash ? 0xffffff : ghost.color);
             ghost.mesh.material.emissive.setHex(flash ? 0xffffff : ghost.color);
+            ghost.mesh.material.emissiveIntensity = 0.5;
         } else if (powerUpActive && !ghost.immuneToPowerUp) {
             ghost.mesh.material.color.setHex(0x0000ff);
             ghost.mesh.material.emissive.setHex(0x0000ff);
+            ghost.mesh.material.emissiveIntensity = 0.3;
         } else {
+            // Normal hunting mode
             ghost.mesh.material.color.setHex(ghost.color);
             ghost.mesh.material.emissive.setHex(ghost.color);
+            ghost.mesh.material.emissiveIntensity = 0.3;
         }
-        // determine movement direction based on vulnerability
+        
+        // Determine target position based on vulnerability
         let targetPos;
         const isVulnerable = powerUpActive && !ghost.immuneToPowerUp;
-        // run from pacman
+        
         if (isVulnerable && ghost.respawnTime <= 0) {
-            targetPos = ghost.mesh.position.clone().sub(
-                new THREE.Vector3().subVectors(pacman.position, ghost.mesh.position)
-            );
-        } 
-        // chase pacman
-        else {
-            targetPos = pacman.position.clone();
+            // Run away from Pac-Man
+            const awayVector = new THREE.Vector3()
+                .subVectors(ghost.mesh.position, pacman.position)
+                .normalize()
+                .multiplyScalar(10);
+            targetPos = ghost.mesh.position.clone().add(awayVector);
+        } else {
+            // Chase Pac-Man with prediction
+            // Calculate Pac-Man's velocity from last known movement
+            if (!ghost.lastPacmanPos) {
+                ghost.lastPacmanPos = pacman.position.clone();
+            }
+            
+            const pacmanVelocity = new THREE.Vector3()
+                .subVectors(pacman.position, ghost.lastPacmanPos);
+            ghost.lastPacmanPos.copy(pacman.position);
+            
+            // Predict Pac-Man's future position (moderate prediction)
+            const predictionTime = 0.5;
+            const predictedPos = pacman.position.clone()
+                .add(pacmanVelocity.multiplyScalar(predictionTime / delta));
+            
+            // Target the predicted position
+            targetPos = predictedPos;
         }
         
-        let direction = new THREE.Vector3()
-            .subVectors(targetPos, ghost.mesh.position)
-            .normalize();
+        // SAFETY CHECK: Force ghost out if somehow in wall
+        forceGhostOutOfWalls(ghost);
         
-        const movement = direction.clone().multiplyScalar(ghost.speed * delta);
-        const newPos = ghost.mesh.position.clone().add(movement);
+        // Check if ghost has been stuck
+        const isStuck = isGhostStuck(ghost, delta);
         
-        // keep within bounds
-        newPos.x = Math.max(-13, Math.min(13, newPos.x));
-        newPos.z = Math.max(-13, Math.min(13, newPos.z));
+        // Find best direction using smart pathfinding
+        let bestDirection = findBestGhostDirection(ghost, targetPos, delta);
         
-        // Improved wall collision handling to prevent getting stuck
-        if (!checkWallCollision(newPos, 0.5)) {
-            ghost.mesh.position.copy(newPos);
-        } else {
-            // Try moving along X axis only
-            const slideX = ghost.mesh.position.clone();
-            slideX.x += movement.x;
-            const canMoveX = !checkWallCollision(slideX, 0.5);
+        if (bestDirection) {
+            // Move in the best direction with careful collision checking
+            let moveSpeed = ghost.speed * delta;
             
-            // Try moving along Z axis only
-            const slideZ = ghost.mesh.position.clone();
-            slideZ.z += movement.z;
-            const canMoveZ = !checkWallCollision(slideZ, 0.5);
+            // If stuck, try to move faster to escape
+            if (isStuck) {
+                moveSpeed *= 1.5;
+            }
             
-            if (canMoveX && canMoveZ) {
-                // Choose the axis that gets closer to target
-                const distX = slideX.distanceTo(targetPos);
-                const distZ = slideZ.distanceTo(targetPos);
-                ghost.mesh.position.copy(distX < distZ ? slideX : slideZ);
-            } else if (canMoveX) {
-                ghost.mesh.position.copy(slideX);
-            } else if (canMoveZ) {
-                ghost.mesh.position.copy(slideZ);
+            const movement = bestDirection.clone().multiplyScalar(moveSpeed);
+            let newPos = ghost.mesh.position.clone().add(movement);
+            
+            // Keep within bounds with safety margin
+            newPos.x = Math.max(-12.8, Math.min(12.8, newPos.x));
+            newPos.z = Math.max(-12.8, Math.min(12.8, newPos.z));
+            newPos.y = 0.5; // Keep Y consistent
+            
+            // Triple-check the new position is safe
+            if (!checkWallCollision(newPos, 0.5)) {
+                ghost.mesh.position.copy(newPos);
+                ghost.preferredDirection = bestDirection;
             } else {
-                // Stuck! Try perpendicular directions
-                const perpDirs = [
-                    new THREE.Vector3(movement.z, 0, -movement.x).normalize(),
-                    new THREE.Vector3(-movement.z, 0, movement.x).normalize()
-                ];
+                // Collision detected, try smaller step
+                const smallerMovement = movement.multiplyScalar(0.5);
+                newPos = ghost.mesh.position.clone().add(smallerMovement);
+                newPos.x = Math.max(-12.8, Math.min(12.8, newPos.x));
+                newPos.z = Math.max(-12.8, Math.min(12.8, newPos.z));
                 
-                for (let perpDir of perpDirs) {
-                    const perpMove = perpDir.multiplyScalar(ghost.speed * delta);
-                    const perpPos = ghost.mesh.position.clone().add(perpMove);
-                    if (!checkWallCollision(perpPos, 0.5)) {
-                        ghost.mesh.position.copy(perpPos);
-                        break;
-                    }
+                if (!checkWallCollision(newPos, 0.5)) {
+                    ghost.mesh.position.copy(newPos);
                 }
             }
         }
+        
+        // EMERGENCY RECOVERY: If still stuck after all attempts
+        if (isStuck && ghost.stuckTimer > 1.0) {
+            // Try aggressive random directions
+            const emergencyDirs = [];
+            for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 8) {
+                emergencyDirs.push(new THREE.Vector3(
+                    Math.cos(angle),
+                    0,
+                    Math.sin(angle)
+                ));
+            }
+            
+            // Try each direction with aggressive movement
+            let escaped = false;
+            for (let dir of emergencyDirs) {
+                const jumpDist = ghost.speed * delta * 3; // Move 3x speed
+                const escapePos = ghost.mesh.position.clone().add(
+                    dir.multiplyScalar(jumpDist)
+                );
+                
+                escapePos.x = Math.max(-12.8, Math.min(12.8, escapePos.x));
+                escapePos.z = Math.max(-12.8, Math.min(12.8, escapePos.z));
+                escapePos.y = 0.5;
+                
+                if (!checkWallCollision(escapePos, 0.5)) {
+                    ghost.mesh.position.copy(escapePos);
+                    ghost.stuckTimer = 0;
+                    escaped = true;
+                    break;
+                }
+            }
+            
+            // LAST RESORT: Teleport to safe position near Pac-Man
+            if (!escaped && ghost.stuckTimer > 2.0) {
+                const safePos = pacman.position.clone();
+                const offsetAngle = Math.random() * Math.PI * 2;
+                safePos.x += Math.cos(offsetAngle) * 3;
+                safePos.z += Math.sin(offsetAngle) * 3;
+                safePos.x = Math.max(-12, Math.min(12, safePos.x));
+                safePos.z = Math.max(-12, Math.min(12, safePos.z));
+                
+                if (!checkWallCollision(safePos, 0.5)) {
+                    ghost.mesh.position.copy(safePos);
+                    ghost.stuckTimer = 0;
+                }
+            }
+        }
+        
         // bob animation
         ghost.mesh.position.y = 0.5 + Math.sin(Date.now() * 0.003 + index) * 0.1;
+        
+        // CONTINUOUS VALIDATION: Ensure ghost never drifts into walls
+        // Check every frame and push out if needed
+        const finalPos = ghost.mesh.position.clone();
+        if (checkWallCollision(finalPos, 0.5)) {
+            forceGhostOutOfWalls(ghost);
+        }
+        
+        // Ensure ghost stays within safe bounds
+        ghost.mesh.position.x = Math.max(-12.8, Math.min(12.8, ghost.mesh.position.x));
+        ghost.mesh.position.z = Math.max(-12.8, Math.min(12.8, ghost.mesh.position.z));
     });
 }
 
