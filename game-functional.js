@@ -29,6 +29,7 @@ let pellets = [];
 let powerUps = [];
 let score = 0;
 let lives = 3;
+let currentLevel = 1;
 let gameOver = false;
 let isPaused = false;
 let powerUpActive = false
@@ -38,6 +39,8 @@ let hudElement;
 let pacmanLight;
 let gameTime = 0;
 let baseGhostSpeed = 2;
+let teleportZones = []; // Teleport portals
+let lastTeleportTime = 0; // Cooldown to prevent rapid teleporting
 
 // camera mode: 1 - top down, 2 - third person, 3 - first person, 4 - spectator
 let cameraMode;
@@ -80,8 +83,12 @@ function init() {
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     scene.add(floor);
+    
+    // Store floor material for level color changes
+    floor.material = floorMaterial;
     // scene initialization
     createMaze();
+    createTeleportZones();
     createPacman();
     createPellets();
     createGhosts();
@@ -91,43 +98,164 @@ function init() {
     clock = new THREE.Clock();
 }
 
+// Get maze layout based on level
+function getMazeLayout(level) {
+    const wallHeight = 2;
+    
+    if (level === 1) {
+        // Level 1: Classic maze (no teleports)
+        return [
+            [0, 0, -14, 30, wallHeight, 1],
+            [0, 0, 14, 30, wallHeight, 1],
+            [-14, 0, 0, 1, wallHeight, 30],
+            [14, 0, 0, 1, wallHeight, 30],
+            [-10, 0, -8, 1, wallHeight, 8],
+            [-6, 0, 2, 1, wallHeight, 8],
+            [-2, 0, -6, 1, wallHeight, 8],
+            [-2, 0, 6, 1, wallHeight, 4],
+            [2, 0, -10, 1, wallHeight, 6],
+            [2, 0, 2, 1, wallHeight, 12],
+            [6, 0, 6, 1, wallHeight, 6],
+            [10, 0, -4, 1, wallHeight, 12],
+            [10, 0, 10, 1, wallHeight, 6],
+            [-8, 0, -10, 6, wallHeight, 1],
+            [0, 0, -10, 6, wallHeight, 1],
+            [8, 0, -10, 6, wallHeight, 1],
+            [-4, 0, -6, 6, wallHeight, 1],
+            [8, 0, -6, 8, wallHeight, 1],
+            [-8, 0, -2, 6, wallHeight, 1],
+            [4, 0, -2, 6, wallHeight, 1],
+            [-12, 0, 2, 4, wallHeight, 1],
+            [0, 0, 2, 4, wallHeight, 1],
+            [-8, 0, 6, 6, wallHeight, 1],
+            [-4, 0, 10, 8, wallHeight, 1],
+            [8, 0, 10, 8, wallHeight, 1]
+        ];
+    } else if (level === 2) {
+        // Level 2: Corridor maze with multiple paths (with teleport gaps)
+        return [
+            // Outer walls with teleport gaps
+            [0, 0, -14, 30, wallHeight, 1],
+            [0, 0, 14, 30, wallHeight, 1],
+            [-14, 0, -8, 1, wallHeight, 12],
+            [-14, 0, 8, 1, wallHeight, 12],
+            [14, 0, -8, 1, wallHeight, 12],
+            [14, 0, 8, 1, wallHeight, 12],
+            
+            // Horizontal corridors creating maze paths
+            [-8, 0, -10, 10, wallHeight, 1],
+            [4, 0, -10, 10, wallHeight, 1],
+            
+            [-10, 0, -6, 4, wallHeight, 1],
+            [2, 0, -6, 4, wallHeight, 1],
+            [8, 0, -6, 8, wallHeight, 1],
+            
+            [-12, 0, -2, 8, wallHeight, 1],
+            [4, 0, -2, 8, wallHeight, 1],
+            
+            [-6, 0, 2, 6, wallHeight, 1],
+            [4, 0, 2, 6, wallHeight, 1],
+            
+            [-10, 0, 6, 4, wallHeight, 1],
+            [2, 0, 6, 4, wallHeight, 1],
+            [8, 0, 6, 8, wallHeight, 1],
+            
+            [-8, 0, 10, 10, wallHeight, 1],
+            [4, 0, 10, 10, wallHeight, 1],
+            
+            // Vertical corridors creating maze paths
+            [-10, 0, -4, 1, wallHeight, 8],
+            [-6, 0, -8, 1, wallHeight, 10],
+            [-2, 0, -12, 1, wallHeight, 6],
+            [-2, 0, 4, 1, wallHeight, 8],
+            [2, 0, -8, 1, wallHeight, 6],
+            [2, 0, 4, 1, wallHeight, 12],
+            [6, 0, -12, 1, wallHeight, 8],
+            [6, 0, 8, 1, wallHeight, 8],
+            [10, 0, -4, 1, wallHeight, 8],
+            [10, 0, 8, 1, wallHeight, 8]
+        ];
+    } else if (level === 3) {
+        // Level 3: Complex winding maze (with teleport gaps)
+        return [
+            // Outer walls with teleport gaps
+            [0, 0, -14, 30, wallHeight, 1],
+            [0, 0, 14, 30, wallHeight, 1],
+            [-14, 0, -8, 1, wallHeight, 12],
+            [-14, 0, 8, 1, wallHeight, 12],
+            [14, 0, -8, 1, wallHeight, 12],
+            [14, 0, 8, 1, wallHeight, 12],
+            
+            // Create winding S-shaped corridors
+            // Top section
+            [-10, 0, -10, 8, wallHeight, 1],
+            [6, 0, -10, 12, wallHeight, 1],
+            [-8, 0, -8, 1, wallHeight, 4],
+            [4, 0, -8, 1, wallHeight, 4],
+            [10, 0, -6, 1, wallHeight, 8],
+            
+            // Upper middle
+            [-12, 0, -6, 4, wallHeight, 1],
+            [-4, 0, -6, 1, wallHeight, 6],
+            [2, 0, -6, 10, wallHeight, 1],
+            [-10, 0, -2, 1, wallHeight, 8],
+            [6, 0, -4, 1, wallHeight, 4],
+            
+            // Center section - create some rooms
+            [-6, 0, -2, 8, wallHeight, 1],
+            [6, 0, -2, 4, wallHeight, 1],
+            [-2, 0, 0, 1, wallHeight, 4],
+            [8, 0, 0, 1, wallHeight, 8],
+            
+            // Lower middle
+            [-12, 0, 2, 6, wallHeight, 1],
+            [0, 0, 2, 8, wallHeight, 1],
+            [-8, 0, 4, 1, wallHeight, 4],
+            [2, 0, 4, 1, wallHeight, 8],
+            [10, 0, 2, 1, wallHeight, 4],
+            
+            // Bottom section
+            [-10, 0, 6, 1, wallHeight, 8],
+            [-4, 0, 6, 8, wallHeight, 1],
+            [8, 0, 6, 8, wallHeight, 1],
+            [-6, 0, 8, 1, wallHeight, 4],
+            [4, 0, 8, 1, wallHeight, 4],
+            [-10, 0, 10, 8, wallHeight, 1],
+            [6, 0, 10, 12, wallHeight, 1],
+            
+            // Add some isolated pillars for challenge
+            [-2, 0, -10, 2, wallHeight, 2],
+            [0, 0, -4, 2, wallHeight, 2],
+            [-8, 0, 8, 2, wallHeight, 2],
+            [4, 0, 10, 2, wallHeight, 2]
+        ];
+    }
+    
+    return [];
+}
+
 // create maze
 function createMaze() {
+    // Different wall colors for each level
+    let wallColor, edgeColor;
+    if (currentLevel === 1) {
+        wallColor = 0x4a4a6a;  // Blue-gray
+        edgeColor = 0x6666aa;
+    } else if (currentLevel === 2) {
+        wallColor = 0x5a4a4a;  // Reddish-gray
+        edgeColor = 0xaa6666;
+    } else {
+        wallColor = 0x4a5a4a;  // Greenish-gray
+        edgeColor = 0x66aa66;
+    }
+    
     const wallMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0x4a4a6a,
+        color: wallColor,
         roughness: 0.8,
         metalness: 0.2
     });
-    const wallHeight = 2;
-    const positions = [];
-    // insert walls
-    positions.push(
-        [0, 0, -14, 30, wallHeight, 1],
-        [0, 0, 14, 30, wallHeight, 1],
-        [-14, 0, 0, 1, wallHeight, 30],
-        [14, 0, 0, 1, wallHeight, 30],
-        [-10, 0, -8, 1, wallHeight, 8],
-        [-6, 0, 2, 1, wallHeight, 8],
-        [-2, 0, -6, 1, wallHeight, 8],
-        [-2, 0, 6, 1, wallHeight, 4],
-        [2, 0, -10, 1, wallHeight, 6],
-        [2, 0, 2, 1, wallHeight, 12],
-        [6, 0, 6, 1, wallHeight, 6],
-        [10, 0, -4, 1, wallHeight, 12],
-        [10, 0, 10, 1, wallHeight, 6],
-        [-8, 0, -10, 6, wallHeight, 1],
-        [0, 0, -10, 6, wallHeight, 1],
-        [8, 0, -10, 6, wallHeight, 1],
-        [-4, 0, -6, 6, wallHeight, 1],
-        [8, 0, -6, 8, wallHeight, 1],
-        [-8, 0, -2, 6, wallHeight, 1],
-        [4, 0, -2, 6, wallHeight, 1],
-        [-12, 0, 2, 4, wallHeight, 1],
-        [0, 0, 2, 4, wallHeight, 1],
-        [-8, 0, 6, 6, wallHeight, 1],
-        [-4, 0, 10, 8, wallHeight, 1],
-        [8, 0, 10, 8, wallHeight, 1]
-    );
+    
+    const positions = getMazeLayout(currentLevel);
     // create wall meshes
     positions.forEach(([x, y, z, w, h, d]) => {
         const geometry = new THREE.BoxGeometry(w, h, d);
@@ -138,7 +266,7 @@ function createMaze() {
         // edge glow
         const edges = new THREE.EdgesGeometry(geometry);
         const lineMaterial = new THREE.LineBasicMaterial({
-            color: 0x6666aa,
+            color: edgeColor,
             transparent: true,
             opacity: 0.4
         });
@@ -147,6 +275,143 @@ function createMaze() {
         // add to scene
         scene.add(wall);
         walls.push(wall);
+    });
+}
+
+// create teleport zones (classic Pac-Man feature!)
+function createTeleportZones() {
+    // Clear existing teleports
+    teleportZones.forEach(zone => {
+        if (zone.mesh) scene.remove(zone.mesh);
+        if (zone.ring) scene.remove(zone.ring);
+    });
+    teleportZones = [];
+    
+    // Only create teleports for levels 2 and 3
+    if (currentLevel === 1) {
+        return;
+    }
+    
+    // Create left and right teleport portals
+    const portalGeometry = new THREE.CylinderGeometry(0.8, 0.8, 2, 32);
+    const portalMaterial = new THREE.MeshStandardMaterial({
+        color: 0x00ffff,
+        emissive: 0x00ffff,
+        emissiveIntensity: 0.8,
+        transparent: true,
+        opacity: 0.6
+    });
+    
+    // Create glowing rings around portals
+    const ringGeometry = new THREE.TorusGeometry(1.2, 0.1, 16, 32);
+    const ringMaterial = new THREE.MeshBasicMaterial({
+        color: 0x00ffff,
+        transparent: true,
+        opacity: 0.8
+    });
+    
+    // Left portal
+    const leftPortal = new THREE.Mesh(portalGeometry, portalMaterial);
+    leftPortal.position.set(-13, 1, 0);
+    leftPortal.rotation.z = Math.PI / 2;
+    scene.add(leftPortal);
+    
+    const leftRing = new THREE.Mesh(ringGeometry, ringMaterial.clone());
+    leftRing.position.set(-13, 1, 0);
+    leftRing.rotation.z = Math.PI / 2;
+    scene.add(leftRing);
+    
+    // Right portal
+    const rightPortal = new THREE.Mesh(portalGeometry, portalMaterial.clone());
+    rightPortal.position.set(13, 1, 0);
+    rightPortal.rotation.z = Math.PI / 2;
+    scene.add(rightPortal);
+    
+    const rightRing = new THREE.Mesh(ringGeometry, ringMaterial.clone());
+    rightRing.position.set(13, 1, 0);
+    rightRing.rotation.z = Math.PI / 2;
+    scene.add(rightRing);
+    
+    // Define teleport zones (invisible triggers)
+    teleportZones.push({
+        mesh: leftPortal,
+        ring: leftRing,
+        position: new THREE.Vector3(-13, 0.5, 0),
+        exitPosition: new THREE.Vector3(12, 0.5, 0), // Exit slightly away to prevent instant re-teleport
+        radius: 1.5
+    });
+    
+    teleportZones.push({
+        mesh: rightPortal,
+        ring: rightRing,
+        position: new THREE.Vector3(13, 0.5, 0),
+        exitPosition: new THREE.Vector3(-12, 0.5, 0), // Exit slightly away to prevent instant re-teleport
+        radius: 1.5
+    });
+}
+
+// animate teleport zones
+function animateTeleportZones(delta) {
+    const time = Date.now() * 0.001;
+    teleportZones.forEach((zone, index) => {
+        if (zone.mesh) {
+            // Rotate portal
+            zone.mesh.rotation.y += delta * 2;
+            const pulse = Math.sin(time * 3 + index * Math.PI) * 0.2 + 1;
+            zone.mesh.scale.set(pulse, 1, pulse);
+        }
+        
+        if (zone.ring) {
+            // Counter-rotate the ring for visual effect
+            zone.ring.rotation.y -= delta * 3;
+            // Pulse the ring
+            const ringPulse = Math.sin(time * 4 + index * Math.PI) * 0.15 + 1;
+            zone.ring.scale.setScalar(ringPulse);
+            // Pulse opacity
+            zone.ring.material.opacity = 0.5 + Math.sin(time * 5 + index * Math.PI) * 0.3;
+        }
+    });
+}
+
+// check teleportation
+function checkTeleportation() {
+    const currentTime = Date.now();
+    const cooldownTime = 500; // 0.5 second cooldown to prevent rapid back-and-forth
+    
+    teleportZones.forEach(zone => {
+        const dist = pacman.position.distanceTo(zone.position);
+        if (dist < zone.radius && (currentTime - lastTeleportTime) > cooldownTime) {
+            // Teleport Pac-Man!
+            pacman.position.copy(zone.exitPosition);
+            lastTeleportTime = currentTime;
+            
+            // Visual feedback: flash the portal
+            if (zone.mesh) {
+                zone.mesh.material.emissiveIntensity = 2.0;
+                setTimeout(() => {
+                    if (zone.mesh) zone.mesh.material.emissiveIntensity = 0.8;
+                }, 200);
+            }
+            
+            // Scale effect
+            pacman.scale.set(0.5, 0.5, 0.5);
+            setTimeout(() => {
+                pacman.scale.set(1, 1, 1);
+            }, 100);
+        }
+    });
+    
+    // Also check for ghosts (they have individual cooldowns)
+    ghosts.forEach(ghost => {
+        if (!ghost.lastTeleportTime) ghost.lastTeleportTime = 0;
+        
+        teleportZones.forEach(zone => {
+            const dist = ghost.mesh.position.distanceTo(zone.position);
+            if (dist < zone.radius && (currentTime - ghost.lastTeleportTime) > cooldownTime) {
+                ghost.mesh.position.copy(zone.exitPosition);
+                ghost.lastTeleportTime = currentTime;
+            }
+        });
     });
 }
 
@@ -225,12 +490,32 @@ function createPellets() {
 // create ghosts
 function createGhosts() {
     const colors = [0xff0000, 0x00ffff, 0xff69b4, 0xffa500];
-    const positions = [
-        [-12, 0.5, -8],
-        [12, 0.5, -8],
-        [-8, 0.5, 12],
-        [8, 0.5, 12]
-    ];
+    
+    // Different spawn positions for each level
+    let positions;
+    if (currentLevel === 1) {
+        positions = [
+            [-12, 0.5, -8],
+            [12, 0.5, -8],
+            [-8, 0.5, 12],
+            [8, 0.5, 12]
+        ];
+    } else if (currentLevel === 2) {
+        positions = [
+            [-11, 0.5, -11],
+            [11, 0.5, -11],
+            [-11, 0.5, 11],
+            [11, 0.5, 11]
+        ];
+    } else {
+        // Level 3
+        positions = [
+            [-11, 0.5, -12],
+            [11, 0.5, -12],
+            [-11, 0.5, 12],
+            [11, 0.5, 12]
+        ];
+    }
     // create ghosts
     colors.forEach((color, i) => {
         const geometry = new THREE.SphereGeometry(0.5, 32, 32);
@@ -339,20 +624,32 @@ function createHUD() {
 // update hud
 function updateHUD() {
     const powerUpText = powerUpActive ? `<br><span style="color: #ff00ff; font-weight: bold;">POWER UP: ${Math.ceil(powerUpTimer)}s</span>` : '';
-    const pauseText = isPaused ? '<br><br><span style="color: #ffff00; font-weight: bold;">PAUSED - Press SPACE to resume</span>' : '';
+    
+    // Level names for flavor
+    const levelNames = ['The Beginning', 'Corridor Chaos', 'Winding Nightmare'];
+    
+    let pauseText = '';
+    if (isPaused && pellets.length === 0 && powerUps.length === 0 && !gameOver) {
+        // Level transition
+        pauseText = `<br><br><span style="color: #00ffff; font-weight: bold; font-size: 24px;">LEVEL ${currentLevel}: ${levelNames[currentLevel - 1]}</span><br><span style="color: #ffff00;">Get ready...</span>`;
+    } else if (isPaused) {
+        pauseText = '<br><br><span style="color: #ffff00; font-weight: bold;">PAUSED - Press SPACE to resume</span>';
+    }
     let totalPellets = pellets.length + powerUps.length;
     const gameOverText = gameOver && totalPellets !== 0 ? '<br><br><span style="color: #ff0000;">GAME OVER! Press R to restart</span>' : '';
-    const winText = gameOver && totalPellets === 0 ? '<br><br><span style="color: #00ff00;">YOU WIN! Press R to restart</span>' : '';
+    const winText = gameOver && totalPellets === 0 ? '<br><br><span style="color: #00ff00; font-size: 24px;">YOU WIN ALL LEVELS! 🎉</span><br>Press R to restart' : '';
     const cameraNames = ['', 'Top-Down', 'Third-Person', 'First-Person', 'Spectator'];
     const cameraText = `<br><span style="color: #888;">Camera: ${cameraNames[cameraMode]} (1-4) | SPACE to pause</span>`;
     const timeText = `<br><span style="color: #888;">Time: ${Math.floor(gameTime)}s</span>`;
     const fpText = cameraMode === 3 ? '<br><span style="color: #88ff88;">Click to enable mouse look | ESC to exit</span>' : '';
+    const levelText = `<br><span style="color: #00ffff; font-weight: bold;">Level ${currentLevel}/3: ${levelNames[currentLevel - 1]}</span>`;
+    const teleportHint = currentLevel > 1 ? `<br><span style="color: #00ffff; font-size: 12px;">💫 Use cyan portals on sides to teleport!</span>` : '';
     hudElement.innerHTML = `
         Score: ${score}<br>
-        Lives: ${lives}${cameraText}${timeText}<br>
+        Lives: ${lives}${levelText}${cameraText}${timeText}<br>
         Pellets: ${pellets.length}<br>
         Power Ups: ${powerUps.length}<br>
-        WASD/arrow keys to move${fpText}${powerUpText}${pauseText}${gameOverText}${winText}
+        WASD/arrow keys to move${teleportHint}${fpText}${powerUpText}${pauseText}${gameOverText}${winText}
     `;
 }
 
@@ -401,8 +698,14 @@ function update(delta) {
     });
     // check win condition - all pellets collected
     if (pellets.length === 0 && powerUps.length === 0) {
-        gameOver = true;
-        updateHUD();
+        // Level complete! Advance to next level
+        if (currentLevel < 3) {
+            advanceLevel();
+        } else {
+            // Game won!
+            gameOver = true;
+            updateHUD();
+        }
         return;
     }
     // update power-up timer
@@ -416,12 +719,14 @@ function update(delta) {
     }
     // update characters and pellets
     updatePacman(delta);
+    checkTeleportation(); // Check if Pac-Man or ghosts are in teleport zones
     checkPelletCollection();
     checkPowerUpCollection();
     checkGhostCollisions();
     updateGhosts(delta);
     animatePellets();
     animatePowerUps(delta);
+    animateTeleportZones(delta);
     updateCamera();
     // update HUD periodically (every frame for time display)
     if (Math.floor(gameTime) !== Math.floor(gameTime - delta)) {
@@ -574,6 +879,57 @@ function resetLevel() {
     updateHUD();
 }
 
+// advance to next level
+function advanceLevel() {
+    currentLevel++;
+    isPaused = true; // Pause to show level transition
+    
+    // Clear existing maze
+    walls.forEach(wall => scene.remove(wall));
+    walls = [];
+    
+    // Clear pellets and power-ups
+    pellets.forEach(p => scene.remove(p));
+    powerUps.forEach(p => scene.remove(p));
+    pellets = [];
+    powerUps = [];
+    
+    // Clear ghosts
+    ghosts.forEach(ghost => scene.remove(ghost.mesh));
+    ghosts = [];
+    
+    // Recreate level
+    createMaze();
+    createTeleportZones();
+    createPellets();
+    createGhosts();
+    
+    // Reset Pac-Man position
+    pacman.position.set(0, 0.5, 0);
+    pacman.rotation.y = 0;
+    powerUpActive = false;
+    powerUpTimer = 0;
+    
+    // Increase difficulty: ghosts get faster each level
+    baseGhostSpeed = 2 + (currentLevel - 1) * 0.5;
+    
+    // Change floor color and fog for each level
+    const levelColors = [0x2a2a3e, 0x3e2a2a, 0x2a3e2a];
+    const fogColors = [0x1a1a2e, 0x2e1a1a, 0x1a2e1a];
+    
+    floor.material.color.setHex(levelColors[currentLevel - 1] || 0x2a2a3e);
+    scene.fog.color.setHex(fogColors[currentLevel - 1] || 0x1a1a2e);
+    scene.background.setHex(fogColors[currentLevel - 1] || 0x1a1a2e);
+    
+    updateHUD();
+    
+    // Auto-unpause after 3 seconds
+    setTimeout(() => {
+        isPaused = false;
+        updateHUD();
+    }, 3000);
+}
+
 // ghost update
 function updateGhosts(delta) {
     ghosts.forEach((ghost, index) => {
@@ -607,47 +963,66 @@ function updateGhosts(delta) {
             ghost.mesh.material.emissive.setHex(ghost.color);
         }
         // determine movement direction based on vulnerability
-        let direction;
+        let targetPos;
         const isVulnerable = powerUpActive && !ghost.immuneToPowerUp;
         // run from pacman
         if (isVulnerable && ghost.respawnTime <= 0) {
-            direction = new THREE.Vector3()
-                .subVectors(ghost.mesh.position, pacman.position)
-                .normalize();
+            targetPos = ghost.mesh.position.clone().sub(
+                new THREE.Vector3().subVectors(pacman.position, ghost.mesh.position)
+            );
         } 
         // chase pacman
         else {
-            direction = new THREE.Vector3()
-                .subVectors(pacman.position, ghost.mesh.position)
-                .normalize();
+            targetPos = pacman.position.clone();
         }
+        
+        let direction = new THREE.Vector3()
+            .subVectors(targetPos, ghost.mesh.position)
+            .normalize();
+        
         const movement = direction.clone().multiplyScalar(ghost.speed * delta);
         const newPos = ghost.mesh.position.clone().add(movement);
+        
         // keep within bounds
         newPos.x = Math.max(-13, Math.min(13, newPos.x));
         newPos.z = Math.max(-13, Math.min(13, newPos.z));
-        // wall sliding
+        
+        // Improved wall collision handling to prevent getting stuck
         if (!checkWallCollision(newPos, 0.5)) {
             ghost.mesh.position.copy(newPos);
         } else {
+            // Try moving along X axis only
             const slideX = ghost.mesh.position.clone();
             slideX.x += movement.x;
-            if (!checkWallCollision(slideX, 0.5)) {
+            const canMoveX = !checkWallCollision(slideX, 0.5);
+            
+            // Try moving along Z axis only
+            const slideZ = ghost.mesh.position.clone();
+            slideZ.z += movement.z;
+            const canMoveZ = !checkWallCollision(slideZ, 0.5);
+            
+            if (canMoveX && canMoveZ) {
+                // Choose the axis that gets closer to target
+                const distX = slideX.distanceTo(targetPos);
+                const distZ = slideZ.distanceTo(targetPos);
+                ghost.mesh.position.copy(distX < distZ ? slideX : slideZ);
+            } else if (canMoveX) {
                 ghost.mesh.position.copy(slideX);
+            } else if (canMoveZ) {
+                ghost.mesh.position.copy(slideZ);
             } else {
-                const slideZ = ghost.mesh.position.clone();
-                slideZ.z += movement.z;
-                if (!checkWallCollision(slideZ, 0.5)) {
-                    ghost.mesh.position.copy(slideZ);
-                } else {
-                    const randomDir = new THREE.Vector3(
-                        (Math.random() - 0.5) * 2,
-                        0,
-                        (Math.random() - 0.5) * 2
-                    ).normalize().multiplyScalar(ghost.speed * delta);
-                    const randomPos = ghost.mesh.position.clone().add(randomDir);
-                    if (!checkWallCollision(randomPos, 0.5)) {
-                        ghost.mesh.position.copy(randomPos);
+                // Stuck! Try perpendicular directions
+                const perpDirs = [
+                    new THREE.Vector3(movement.z, 0, -movement.x).normalize(),
+                    new THREE.Vector3(-movement.z, 0, movement.x).normalize()
+                ];
+                
+                for (let perpDir of perpDirs) {
+                    const perpMove = perpDir.multiplyScalar(ghost.speed * delta);
+                    const perpPos = ghost.mesh.position.clone().add(perpMove);
+                    if (!checkWallCollision(perpPos, 0.5)) {
+                        ghost.mesh.position.copy(perpPos);
+                        break;
                     }
                 }
             }
