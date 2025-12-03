@@ -6,6 +6,7 @@ import {
 } from './state.js';
 import { checkWallCollisionSimple } from './collision.js';
 import { updateHUD } from './ui.js';
+import { playPelletSound, playPowerUpSound } from './audio.js';
 
 // Create pellets and power ups
 export function createPellets() {
@@ -74,6 +75,7 @@ export function checkPelletCollection() {
             scene.remove(pellet);
             removePellet(i);
             setScore(score + 10);
+            playPelletSound();
             updateHUD();
         }
     }
@@ -91,6 +93,7 @@ export function checkPowerUpCollection() {
             setPowerUpActive(true);
             setPowerUpTimer(10);
             setGhostMultiplier(1); // Reset multiplier for new power-up
+            playPowerUpSound();
             // Reset ghost immunity
             ghosts.forEach(ghost => {
                 ghost.immuneToPowerUp = false;

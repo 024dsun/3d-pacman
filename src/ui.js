@@ -4,9 +4,86 @@ import {
     setHudElement, setGameStarted, setGameOver, setScore, setLives, setCurrentLevel,
     setGameTime, setPowerUpActive, setPowerUpTimer, setGhostMultiplier
 } from './state.js';
+import { playStartSound, startBackgroundMusic, stopBackgroundMusic } from './audio.js';
 
 // Start screen element
 let startScreen;
+let minimapCanvas;
+let minimapCtx;
+
+// Create minimap
+export function createMinimap() {
+    minimapCanvas = document.createElement('canvas');
+    minimapCanvas.width = 150;
+    minimapCanvas.height = 150;
+    minimapCanvas.style.position = 'absolute';
+    minimapCanvas.style.bottom = '20px';
+    minimapCanvas.style.right = '20px';
+    minimapCanvas.style.border = '2px solid #444';
+    minimapCanvas.style.borderRadius = '5px';
+    minimapCanvas.style.opacity = '0.8';
+    document.body.appendChild(minimapCanvas);
+    minimapCtx = minimapCanvas.getContext('2d');
+}
+
+// Update minimap
+export function updateMinimap() {
+    if (!minimapCtx || !gameStarted) return;
+    
+    const ctx = minimapCtx;
+    const size = 150;
+    const scale = size / 30; // Map is roughly 30x30 units
+    const offsetX = size / 2;
+    const offsetZ = size / 2;
+    
+    // Clear
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, 0, size, size);
+    
+    // Draw walls (simplified - just outer boundary)
+    ctx.strokeStyle = '#4444aa';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(5, 5, size - 10, size - 10);
+    
+    // Draw pellets as tiny dots
+    ctx.fillStyle = '#ffff00';
+    pellets.forEach(p => {
+        const x = offsetX + p.position.x * scale;
+        const z = offsetZ + p.position.z * scale;
+        ctx.beginPath();
+        ctx.arc(x, z, 1, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    
+    // Draw power-ups
+    ctx.fillStyle = '#ff00ff';
+    powerUps.forEach(p => {
+        const x = offsetX + p.position.x * scale;
+        const z = offsetZ + p.position.z * scale;
+        ctx.beginPath();
+        ctx.arc(x, z, 3, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    
+    // Draw ghosts (only if visible)
+    ghosts.forEach(g => {
+        if (!g.mesh.visible) return; // Skip hidden ghosts
+        const x = offsetX + g.mesh.position.x * scale;
+        const z = offsetZ + g.mesh.position.z * scale;
+        ctx.fillStyle = powerUpActive && !g.immuneToPowerUp ? '#0000ff' : '#' + g.color.toString(16).padStart(6, '0');
+        ctx.beginPath();
+        ctx.arc(x, z, 4, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    
+    // Draw Pac-Man
+    ctx.fillStyle = '#ffff00';
+    const px = offsetX + pacman.position.x * scale;
+    const pz = offsetZ + pacman.position.z * scale;
+    ctx.beginPath();
+    ctx.arc(px, pz, 5, 0, Math.PI * 2);
+    ctx.fill();
+}
 
 // Create start screen
 export function createStartScreen() {
@@ -70,6 +147,7 @@ export function createStartScreen() {
 export function showStartScreen(isGameOver = false) {
     if (!startScreen) createStartScreen();
     startScreen.style.display = 'flex';
+    stopBackgroundMusic(); // Stop music when showing start/game over screen
     
     // Update text if game over
     if (isGameOver) {
@@ -94,6 +172,8 @@ export function hideStartScreen() {
 // Start game
 export function startGame() {
     hideStartScreen();
+    playStartSound();
+    startBackgroundMusic();
     setGameStarted(true);
     setGameOver(false);
     setScore(0);

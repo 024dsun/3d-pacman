@@ -9,7 +9,7 @@ import { createPacman } from './pacman.js';
 import { createPellets } from './pellets.js';
 import { createGhosts } from './ghosts.js';
 import { setupInput } from './input.js';
-import { createHUD, createStartScreen, showStartScreen } from './ui.js';
+import { createHUD, createStartScreen, showStartScreen, createMinimap } from './ui.js';
 import { update } from './game.js';
 
 // Initialize game
@@ -59,6 +59,7 @@ function init() {
     createGhosts();
     setupInput();
     createHUD();
+    createMinimap();
     createStartScreen();
     showStartScreen();
     

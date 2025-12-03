@@ -36,7 +36,7 @@ export function updateCamera() {
                 pacPos.z + lookZ
             );
             scene.fog.near = 1;
-            scene.fog.far = 12;
+            scene.fog.far = 25;
             break;
         // Spectator (static overview)
         case 4:
@@ -50,7 +50,7 @@ export function updateCamera() {
             camera.position.x = pacPos.x;
             camera.position.z = pacPos.z + 15;
             camera.lookAt(pacPos.x, 0, pacPos.z);
-            scene.fog.near = 5;
-            scene.fog.far = 40;
+            scene.fog.near = 3;
+            scene.fog.far = 30;
     }
 }

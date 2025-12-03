@@ -13,8 +13,9 @@ import { updatePacman } from './pacman.js';
 import { createPellets, clearAllPellets, checkPelletCollection, checkPowerUpCollection, animatePellets, animatePowerUps } from './pellets.js';
 import { createGhosts, clearAllGhosts, updateGhosts } from './ghosts.js';
 import { checkWallCollision } from './collision.js';
-import { updateHUD, showStartScreen } from './ui.js';
+import { updateHUD, showStartScreen, updateMinimap } from './ui.js';
 import { updateCamera } from './camera.js';
+import { playGhostEatenSound, playDeathSound, playLevelCompleteSound } from './audio.js';
 
 // Reset level (lose life)
 export function resetLevel() {
@@ -66,6 +67,7 @@ export function resetLevel() {
 
 // Advance to next level
 export function advanceLevel() {
+    playLevelCompleteSound();
     setCurrentLevel(currentLevel + 1);
     setIsPaused(true);
     
@@ -166,6 +168,7 @@ export function update(delta) {
     animatePowerUps(delta);
     animateTeleportZones(delta);
     updateCamera();
+    updateMinimap();
     
     // Update HUD periodically
     if (Math.floor(gameTime) !== Math.floor(gameTime - delta)) {
@@ -187,12 +190,14 @@ function checkGhostCollisions() {
                 ghost.mesh.position.set(...ghost.startPosition);
                 ghost.immuneToPowerUp = true;
                 ghost.respawnTime = 1.0;
+                playGhostEatenSound();
                 updateHUD();
             } 
             // Lose life
             else {
                 if (!ghost.respawnTime || ghost.respawnTime <= 0) {
                     setLives(lives - 1);
+                    playDeathSound();
                     if (lives <= 0) {
                         setGameOver(true);
                         setGameStarted(false);
