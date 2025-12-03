@@ -16,6 +16,7 @@ import { checkWallCollision } from './collision.js';
 import { updateHUD, showStartScreen, updateMinimap } from './ui.js';
 import { updateCamera } from './camera.js';
 import { playGhostEatenSound, playDeathSound, playLevelCompleteSound } from './audio.js';
+import { createGhostExplosion, createDeathEffect, screenShake, updateEffects } from './effects.js';
 
 // Reset level (lose life)
 export function resetLevel() {
@@ -129,8 +130,8 @@ export function update(delta) {
     // Track game time and scale difficulty
     setGameTime(gameTime + delta);
     
-    // Ghosts speed up gradually
-    const speedMultiplier = 1 + Math.floor(gameTime / 30) * 0.05;
+    // Ghosts speed up by 10% every 20 seconds
+    const speedMultiplier = Math.pow(1.1, Math.floor(gameTime / 20));
     ghosts.forEach(ghost => {
         ghost.speed = baseGhostSpeed * speedMultiplier;
     });
@@ -169,6 +170,7 @@ export function update(delta) {
     animateTeleportZones(delta);
     updateCamera();
     updateMinimap();
+    updateEffects(delta);
     
     // Update HUD periodically
     if (Math.floor(gameTime) !== Math.floor(gameTime - delta)) {
@@ -187,6 +189,8 @@ function checkGhostCollisions() {
                 const points = 200 * ghostMultiplier;
                 setScore(score + points);
                 setGhostMultiplier(ghostMultiplier * 2);
+                createGhostExplosion(ghost.mesh.position.clone(), ghost.color);
+                screenShake(0.4, 0.3);
                 ghost.mesh.position.set(...ghost.startPosition);
                 ghost.immuneToPowerUp = true;
                 ghost.respawnTime = 1.0;
@@ -197,6 +201,8 @@ function checkGhostCollisions() {
             else {
                 if (!ghost.respawnTime || ghost.respawnTime <= 0) {
                     setLives(lives - 1);
+                    createDeathEffect(pacman.position.clone());
+                    screenShake(0.6, 0.5);
                     playDeathSound();
                     if (lives <= 0) {
                         setGameOver(true);
