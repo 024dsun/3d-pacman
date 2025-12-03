@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { 
-    setScene, setCamera, setRenderer, setClock, setFloor,
+    setScene, setCamera, setRenderer, setClock, setFloor, setAmbientLight, setDirectionalLight,
     scene, camera, renderer, clock
 } from './state.js';
 import { createMaze } from './maze.js';
@@ -37,10 +37,13 @@ function init() {
     // Lights
     const ambientLight = new THREE.AmbientLight(0x6060a0, 0.5);
     scene.add(ambientLight);
+    setAmbientLight(ambientLight);
+    
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
     dirLight.position.set(10, 20, 10);
     dirLight.castShadow = true;
     scene.add(dirLight);
+    setDirectionalLight(dirLight);
     
     // Floor
     const floorGeometry = new THREE.PlaneGeometry(30, 30);

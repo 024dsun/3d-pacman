@@ -45,6 +45,10 @@ export let isPointerLocked = false;
 export let hudElement;
 export let pacmanLight;
 
+// Lighting for dynamic effects
+export let ambientLight;
+export let directionalLight;
+
 // Setters for mutable state
 export function setScene(s) { scene = s; }
 export function setCamera(c) { camera = c; }
@@ -54,6 +58,8 @@ export function setFloor(f) { floor = f; }
 export function setPacman(p) { pacman = p; }
 export function setPacmanLight(l) { pacmanLight = l; }
 export function setHudElement(h) { hudElement = h; }
+export function setAmbientLight(l) { ambientLight = l; }
+export function setDirectionalLight(l) { directionalLight = l; }
 
 export function setScore(s) { score = s; }
 export function setLives(l) { lives = l; }

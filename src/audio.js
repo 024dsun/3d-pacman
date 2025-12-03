@@ -271,34 +271,36 @@ export function updateHeartbeat(closestGhostDistance) {
     }
 }
 
-// Play a single heartbeat (two thumps)
+// Play a single heartbeat (lub-dub) using sine waves with proper envelope
 function playHeartbeat(intensity) {
     const ctx = getAudioContext();
-    const volume = 0.05 + intensity * 0.25; // Louder when closer
+    const volume = 0.15 + intensity * 0.5;
     
-    // First thump (louder)
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.type = 'sine';
-    osc1.frequency.value = 40 + intensity * 20; // Higher pitch when panicked
-    osc1.connect(gain1);
-    gain1.connect(ctx.destination);
-    gain1.gain.setValueAtTime(volume, ctx.currentTime);
-    gain1.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
-    osc1.start(ctx.currentTime);
-    osc1.stop(ctx.currentTime + 0.15);
+    // LUB (first beat) - two quick sine pulses
+    const lub1 = ctx.createOscillator();
+    const lub1Gain = ctx.createGain();
+    lub1.type = 'sine';
+    lub1.frequency.value = 60;
+    lub1.connect(lub1Gain);
+    lub1Gain.connect(ctx.destination);
+    lub1Gain.gain.setValueAtTime(0, ctx.currentTime);
+    lub1Gain.gain.linearRampToValueAtTime(volume, ctx.currentTime + 0.02);
+    lub1Gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.1);
+    lub1.start(ctx.currentTime);
+    lub1.stop(ctx.currentTime + 0.12);
     
-    // Second thump (softer, slightly delayed)
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.type = 'sine';
-    osc2.frequency.value = 35 + intensity * 15;
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    gain2.gain.setValueAtTime(volume * 0.6, ctx.currentTime + 0.12);
-    gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
-    osc2.start(ctx.currentTime + 0.12);
-    osc2.stop(ctx.currentTime + 0.25);
+    // DUB (second beat) - slightly higher, comes right after
+    const dub = ctx.createOscillator();
+    const dubGain = ctx.createGain();
+    dub.type = 'sine';
+    dub.frequency.value = 50;
+    dub.connect(dubGain);
+    dubGain.connect(ctx.destination);
+    dubGain.gain.setValueAtTime(0, ctx.currentTime + 0.15);
+    dubGain.gain.linearRampToValueAtTime(volume * 0.7, ctx.currentTime + 0.17);
+    dubGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.28);
+    dub.start(ctx.currentTime + 0.15);
+    dub.stop(ctx.currentTime + 0.3);
 }
 
 // Stop heartbeat

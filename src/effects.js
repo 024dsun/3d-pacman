@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { scene, camera } from './state.js';
+import { scene, camera, ambientLight, directionalLight, pacman, ghosts } from './state.js';
 
 // Particle systems
 const particles = [];
@@ -143,8 +143,51 @@ export function updateScreenShake(delta) {
     }
 }
 
+// Dynamic lighting - dims dramatically when ghosts are close
+const baseLightIntensity = { ambient: 0.5, directional: 0.6 };
+const minLightIntensity = { ambient: 0.05, directional: 0.05 };
+
+export function updateDynamicLighting() {
+    if (!ambientLight || !directionalLight || !pacman || !ghosts) return;
+    
+    // Find closest ghost distance
+    let closestDist = Infinity;
+    ghosts.forEach(ghost => {
+        const dist = pacman.position.distanceTo(ghost.mesh.position);
+        if (dist < closestDist) closestDist = dist;
+    });
+    
+    // Calculate darkness factor (0 = normal, 1 = darkest)
+    const maxDist = 8;
+    const minDist = 1;
+    const darkness = Math.max(0, Math.min(1, 
+        1 - (closestDist - minDist) / (maxDist - minDist)
+    ));
+    
+    // Lerp light intensities
+    const targetAmbient = baseLightIntensity.ambient - darkness * (baseLightIntensity.ambient - minLightIntensity.ambient);
+    const targetDirectional = baseLightIntensity.directional - darkness * (baseLightIntensity.directional - minLightIntensity.directional);
+    
+    // Smooth transition
+    ambientLight.intensity += (targetAmbient - ambientLight.intensity) * 0.1;
+    directionalLight.intensity += (targetDirectional - directionalLight.intensity) * 0.1;
+    
+    // Also shift ambient color towards red when very close (danger!)
+    if (darkness > 0.5) {
+        const redShift = (darkness - 0.5) * 2; // 0 to 1 when darkness is 0.5 to 1
+        const r = Math.floor(0x60 + redShift * 0x40);
+        const g = Math.floor(0x60 - redShift * 0x30);
+        const b = Math.floor(0xa0 - redShift * 0x60);
+        ambientLight.color.setRGB(r / 255, g / 255, b / 255);
+    } else {
+        // Reset to normal purple-ish ambient
+        ambientLight.color.setHex(0x6060a0);
+    }
+}
+
 // Combined update for all effects
 export function updateEffects(delta) {
     updateParticles(delta);
     updateScreenShake(delta);
+    updateDynamicLighting();
 }
