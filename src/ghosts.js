@@ -74,7 +74,7 @@ export function createGhosts() {
         addGhost({
             mesh: ghostMesh,
             velocity: new THREE.Vector3(),
-            speed: 2,
+            speed: 3,
             startPosition: spawnPos.slice(),
             color: color,
             respawnTime: 0,
@@ -94,8 +94,113 @@ export function clearAllGhosts() {
     clearGhosts();
 }
 
-// Find best direction for ghost - picks direction that gets closest to target
-export function findBestDirection(ghostPos, targetPos, isChasing) {
+// Grid-based A* pathfinding
+const GRID_SIZE = 1; // 1 unit per grid cell
+
+function posToGrid(x, z) {
+    return { 
+        gx: Math.round(x / GRID_SIZE), 
+        gz: Math.round(z / GRID_SIZE) 
+    };
+}
+
+function gridToPos(gx, gz) {
+    return { x: gx * GRID_SIZE, z: gz * GRID_SIZE };
+}
+
+function isWalkable(gx, gz) {
+    const pos = new THREE.Vector3(gx * GRID_SIZE, 0.5, gz * GRID_SIZE);
+    return !checkWallCollision(pos, 0.4);
+}
+
+function heuristic(ax, az, bx, bz) {
+    return Math.abs(ax - bx) + Math.abs(az - bz); // Manhattan distance
+}
+
+// A* pathfinding - returns next position to move toward
+function findPath(startX, startZ, endX, endZ, maxIterations = 200) {
+    const start = posToGrid(startX, startZ);
+    const end = posToGrid(endX, endZ);
+    
+    // If already at goal or goal not walkable, return null
+    if (start.gx === end.gx && start.gz === end.gz) return null;
+    
+    const openSet = [];
+    const closedSet = new Set();
+    const cameFrom = new Map();
+    const gScore = new Map();
+    const fScore = new Map();
+    
+    const startKey = `${start.gx},${start.gz}`;
+    openSet.push({ gx: start.gx, gz: start.gz, f: 0 });
+    gScore.set(startKey, 0);
+    fScore.set(startKey, heuristic(start.gx, start.gz, end.gx, end.gz));
+    
+    const directions = [
+        { dx: 1, dz: 0 },
+        { dx: -1, dz: 0 },
+        { dx: 0, dz: 1 },
+        { dx: 0, dz: -1 }
+    ];
+    
+    let iterations = 0;
+    
+    while (openSet.length > 0 && iterations < maxIterations) {
+        iterations++;
+        
+        // Get node with lowest fScore
+        openSet.sort((a, b) => a.f - b.f);
+        const current = openSet.shift();
+        const currentKey = `${current.gx},${current.gz}`;
+        
+        // Reached goal?
+        if (current.gx === end.gx && current.gz === end.gz) {
+            // Reconstruct path and return first step
+            let node = currentKey;
+            let prev = null;
+            while (cameFrom.has(node)) {
+                prev = node;
+                node = cameFrom.get(node);
+            }
+            if (prev) {
+                const [gx, gz] = prev.split(',').map(Number);
+                return gridToPos(gx, gz);
+            }
+            return null;
+        }
+        
+        closedSet.add(currentKey);
+        
+        // Check neighbors
+        for (const dir of directions) {
+            const nx = current.gx + dir.dx;
+            const nz = current.gz + dir.dz;
+            const neighborKey = `${nx},${nz}`;
+            
+            if (closedSet.has(neighborKey)) continue;
+            if (!isWalkable(nx, nz)) continue;
+            
+            const tentativeG = gScore.get(currentKey) + 1;
+            
+            if (!gScore.has(neighborKey) || tentativeG < gScore.get(neighborKey)) {
+                cameFrom.set(neighborKey, currentKey);
+                gScore.set(neighborKey, tentativeG);
+                const f = tentativeG + heuristic(nx, nz, end.gx, end.gz);
+                fScore.set(neighborKey, f);
+                
+                if (!openSet.find(n => n.gx === nx && n.gz === nz)) {
+                    openSet.push({ gx: nx, gz: nz, f });
+                }
+            }
+        }
+    }
+    
+    // No path found - return null
+    return null;
+}
+
+// Fallback: find best direction using simple greedy approach
+function findBestDirectionGreedy(ghostPos, targetPos, isChasing) {
     const dirs = [
         new THREE.Vector3(1, 0, 0),
         new THREE.Vector3(-1, 0, 0),
@@ -103,7 +208,7 @@ export function findBestDirection(ghostPos, targetPos, isChasing) {
         new THREE.Vector3(0, 0, -1)
     ];
     
-    // Shuffle directions to add randomness when scores are equal
+    // Shuffle for randomness
     for (let i = dirs.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [dirs[i], dirs[j]] = [dirs[j], dirs[i]];
@@ -112,35 +217,16 @@ export function findBestDirection(ghostPos, targetPos, isChasing) {
     let bestDir = null;
     let bestScore = isChasing ? Infinity : -Infinity;
     
-    // Calculate direction to target for prioritizing aligned movement
-    const toTarget = new THREE.Vector3().subVectors(targetPos, ghostPos);
-    const primaryAxis = Math.abs(toTarget.x) > Math.abs(toTarget.z) ? 'x' : 'z';
-    
     for (let dir of dirs) {
         const testPos = ghostPos.clone().add(dir.clone().multiplyScalar(0.5));
         if (!checkWallCollision(testPos, 0.4)) {
             const dist = testPos.distanceTo(targetPos);
-            
-            // Add small bonus for moving along the primary axis toward target
-            let score = dist;
-            if (primaryAxis === 'x' && dir.x !== 0 && Math.sign(dir.x) === Math.sign(toTarget.x)) {
-                score -= 0.1; // Small bonus
-            } else if (primaryAxis === 'z' && dir.z !== 0 && Math.sign(dir.z) === Math.sign(toTarget.z)) {
-                score -= 0.1;
-            }
-            
-            if (isChasing) {
-                // Chasing: prefer closer distance (lower score)
-                if (score < bestScore) {
-                    bestScore = score;
-                    bestDir = dir.clone();
-                }
-            } else {
-                // Fleeing: prefer farther distance (higher score)
-                if (dist > bestScore) {
-                    bestScore = dist;
-                    bestDir = dir.clone();
-                }
+            if (isChasing && dist < bestScore) {
+                bestScore = dist;
+                bestDir = dir.clone();
+            } else if (!isChasing && dist > bestScore) {
+                bestScore = dist;
+                bestDir = dir.clone();
             }
         }
     }
@@ -148,7 +234,7 @@ export function findBestDirection(ghostPos, targetPos, isChasing) {
     return bestDir;
 }
 
-// Ghost update - simple greedy approach
+// Ghost update - uses A* pathfinding
 export function updateGhosts(delta) {
     ghosts.forEach((ghost, index) => {
         // Update respawn timer
@@ -184,15 +270,71 @@ export function updateGhosts(delta) {
         
         // Determine if chasing or fleeing
         const isVulnerable = powerUpActive && !ghost.immuneToPowerUp;
-        const isChasing = !isVulnerable || ghost.respawnTime > 0;
+        const isChasing = !isVulnerable;
         
-        // Find best direction
-        const bestDir = findBestDirection(ghost.mesh.position, pacman.position, isChasing);
+        // Skip movement if respawning
+        if (ghost.respawnTime && ghost.respawnTime > 0) {
+            ghost.mesh.position.y = 0.5 + Math.sin(Date.now() * 0.003 + index) * 0.1;
+            return;
+        }
         
         let moved = false;
-        if (bestDir) {
-            const movement = bestDir.multiplyScalar(ghost.speed * delta);
-            const newPos = ghost.mesh.position.clone().add(movement);
+        const ghostPos = ghost.mesh.position;
+        const pacPos = pacman.position;
+        
+        // Update path periodically (not every frame for performance)
+        ghost.pathCheckTimer = (ghost.pathCheckTimer || 0) + delta;
+        
+        if (ghost.pathCheckTimer > 0.2 || !ghost.nextTarget) {
+            ghost.pathCheckTimer = 0;
+            
+            if (isChasing) {
+                // Use A* to find path to Pac-Man
+                const nextStep = findPath(ghostPos.x, ghostPos.z, pacPos.x, pacPos.z);
+                if (nextStep) {
+                    ghost.nextTarget = new THREE.Vector3(nextStep.x, 0.5, nextStep.z);
+                } else {
+                    ghost.nextTarget = null;
+                }
+            } else {
+                // Fleeing: find path away from Pac-Man
+                // Pick a corner far from Pac-Man
+                const corners = [
+                    { x: -12, z: -12 },
+                    { x: 12, z: -12 },
+                    { x: -12, z: 12 },
+                    { x: 12, z: 12 }
+                ];
+                
+                // Find farthest corner from Pac-Man
+                let bestCorner = corners[0];
+                let bestDist = 0;
+                for (const corner of corners) {
+                    const dist = Math.abs(corner.x - pacPos.x) + Math.abs(corner.z - pacPos.z);
+                    if (dist > bestDist) {
+                        bestDist = dist;
+                        bestCorner = corner;
+                    }
+                }
+                
+                const nextStep = findPath(ghostPos.x, ghostPos.z, bestCorner.x, bestCorner.z);
+                if (nextStep) {
+                    ghost.nextTarget = new THREE.Vector3(nextStep.x, 0.5, nextStep.z);
+                } else {
+                    ghost.nextTarget = null;
+                }
+            }
+        }
+        
+        // Move toward next target
+        if (ghost.nextTarget) {
+            const dir = new THREE.Vector3()
+                .subVectors(ghost.nextTarget, ghostPos)
+                .normalize();
+            
+            const movement = dir.multiplyScalar(ghost.speed * delta);
+            const newPos = ghostPos.clone().add(movement);
+            newPos.y = 0.5;
             
             // Keep within bounds
             newPos.x = Math.max(-13, Math.min(13, newPos.x));
@@ -202,23 +344,30 @@ export function updateGhosts(delta) {
                 ghost.mesh.position.copy(newPos);
                 moved = true;
             }
+            
+            // Clear target if reached
+            const distToTarget = Math.sqrt(
+                Math.pow(ghostPos.x - ghost.nextTarget.x, 2) + 
+                Math.pow(ghostPos.z - ghost.nextTarget.z, 2)
+            );
+            if (distToTarget < 0.3) {
+                ghost.nextTarget = null;
+            }
         }
         
-        // If no best direction found, try any valid direction
+        // Fallback: use greedy if A* failed
         if (!moved) {
-            const dirs = [
-                new THREE.Vector3(1, 0, 0),
-                new THREE.Vector3(-1, 0, 0),
-                new THREE.Vector3(0, 0, 1),
-                new THREE.Vector3(0, 0, -1)
-            ].sort(() => Math.random() - 0.5);
-            
-            for (let dir of dirs) {
-                const testPos = ghost.mesh.position.clone().add(dir.clone().multiplyScalar(ghost.speed * delta));
-                if (!checkWallCollision(testPos, 0.4)) {
-                    ghost.mesh.position.copy(testPos);
-                    moved = true;
-                    break;
+            const bestDir = findBestDirectionGreedy(ghostPos, pacPos, isChasing);
+            if (bestDir) {
+                const movement = bestDir.multiplyScalar(ghost.speed * delta);
+                const newPos = ghostPos.clone().add(movement);
+                newPos.y = 0.5;
+                
+                newPos.x = Math.max(-13, Math.min(13, newPos.x));
+                newPos.z = Math.max(-13, Math.min(13, newPos.z));
+                
+                if (!checkWallCollision(newPos, 0.4)) {
+                    ghost.mesh.position.copy(newPos);
                 }
             }
         }
