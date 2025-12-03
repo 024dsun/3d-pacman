@@ -8,6 +8,12 @@ import { checkWallCollision } from './collision.js';
 // Create ghosts
 export function createGhosts() {
     const colors = [0xff0000, 0x00ffff, 0xff69b4, 0xffa500];
+    const corners = [
+        { x: 12, z: -12 },   // Blinky's corner (top-right)
+        { x: -12, z: 12 },   // Inky's corner (bottom-left)
+        { x: -12, z: -12 },  // Pinky's corner (top-left)
+        { x: 12, z: 12 }     // Clyde's corner (bottom-right)
+    ];
     
     // Different spawn positions for each level
     let positions;
@@ -71,6 +77,13 @@ export function createGhosts() {
         
         // Add to scene
         scene.add(ghostMesh);
+        // Ghost personalities:
+        // 0 = Blinky (red): Direct chaser - always takes shortest path
+        // 1 = Inky (cyan): Ambusher - targets position ahead of Pac-Man
+        // 2 = Pinky (pink): Flanker - tries to cut off Pac-Man
+        // 3 = Clyde (orange): Shy - chases when far, scatters when close
+        const personalities = ['blinky', 'inky', 'pinky', 'clyde'];
+        
         addGhost({
             mesh: ghostMesh,
             velocity: new THREE.Vector3(),
@@ -83,7 +96,9 @@ export function createGhosts() {
             lastPosition: new THREE.Vector3(...spawnPos),
             lastPacmanPos: null,
             preferredDirection: null,
-            pathCheckTimer: 0
+            pathCheckTimer: 0,
+            personality: personalities[i],
+            scatterTarget: corners[i] // Each ghost has a home corner
         });
     });
 }
@@ -92,6 +107,80 @@ export function createGhosts() {
 export function clearAllGhosts() {
     ghosts.forEach(g => scene.remove(g.mesh));
     clearGhosts();
+}
+
+// Get Pac-Man's facing direction based on movement
+let lastPacmanPosition = new THREE.Vector3();
+let pacmanDirection = new THREE.Vector3(1, 0, 0);
+
+function updatePacmanDirection() {
+    const currentPos = pacman.position.clone();
+    const movement = currentPos.clone().sub(lastPacmanPosition);
+    if (movement.length() > 0.01) {
+        pacmanDirection.copy(movement).normalize();
+    }
+    lastPacmanPosition.copy(currentPos);
+}
+
+// Calculate target based on ghost personality (ALL ghosts always chase Pac-Man)
+function getPersonalityTarget(ghost) {
+    const pacPos = pacman.position;
+    
+    // All ghosts target Pac-Man's position, with slight variations
+    switch (ghost.personality) {
+        case 'blinky':
+            // Direct chaser - always targets Pac-Man's exact position
+            return { x: pacPos.x, z: pacPos.z };
+            
+        case 'inky': {
+            // Targets slightly ahead of Pac-Man (if Pac-Man is moving)
+            const ahead = pacPos.clone().add(pacmanDirection.clone().multiplyScalar(2));
+            return { x: ahead.x, z: ahead.z };
+        }
+            
+        case 'pinky': {
+            // Targets slightly ahead of Pac-Man
+            const ahead = pacPos.clone().add(pacmanDirection.clone().multiplyScalar(3));
+            return { x: ahead.x, z: ahead.z };
+        }
+            
+        case 'clyde': {
+            // Targets Pac-Man directly (simple chase)
+            return { x: pacPos.x, z: pacPos.z };
+        }
+            
+        default:
+            return { x: pacPos.x, z: pacPos.z };
+    }
+}
+
+// Calculate flee target - find the corner farthest from Pac-Man
+function getFleeTarget(ghost) {
+    const pacPos = pacman.position;
+    
+    // Pick the corner that is farthest from Pac-Man
+    const corners = [
+        { x: -11, z: -11 },
+        { x: 11, z: -11 },
+        { x: -11, z: 11 },
+        { x: 11, z: 11 }
+    ];
+    
+    let bestCorner = corners[0];
+    let bestDist = 0;
+    
+    for (const corner of corners) {
+        const dist = Math.sqrt(
+            Math.pow(corner.x - pacPos.x, 2) + 
+            Math.pow(corner.z - pacPos.z, 2)
+        );
+        if (dist > bestDist) {
+            bestDist = dist;
+            bestCorner = corner;
+        }
+    }
+    
+    return bestCorner;
 }
 
 // Grid-based A* pathfinding
@@ -199,8 +288,8 @@ function findPath(startX, startZ, endX, endZ, maxIterations = 200) {
     return null;
 }
 
-// Fallback: find best direction using simple greedy approach
-function findBestDirectionGreedy(ghostPos, targetPos, isChasing) {
+// Fallback: find best direction - always moves TOWARD targetPos
+function findBestDirectionGreedy(ghostPos, targetPos) {
     const dirs = [
         new THREE.Vector3(1, 0, 0),
         new THREE.Vector3(-1, 0, 0),
@@ -208,23 +297,20 @@ function findBestDirectionGreedy(ghostPos, targetPos, isChasing) {
         new THREE.Vector3(0, 0, -1)
     ];
     
-    // Shuffle for randomness
+    // Shuffle for randomness when scores are equal
     for (let i = dirs.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [dirs[i], dirs[j]] = [dirs[j], dirs[i]];
     }
     
     let bestDir = null;
-    let bestScore = isChasing ? Infinity : -Infinity;
+    let bestScore = Infinity;
     
     for (let dir of dirs) {
         const testPos = ghostPos.clone().add(dir.clone().multiplyScalar(0.5));
         if (!checkWallCollision(testPos, 0.4)) {
             const dist = testPos.distanceTo(targetPos);
-            if (isChasing && dist < bestScore) {
-                bestScore = dist;
-                bestDir = dir.clone();
-            } else if (!isChasing && dist > bestScore) {
+            if (dist < bestScore) {
                 bestScore = dist;
                 bestDir = dir.clone();
             }
@@ -234,8 +320,11 @@ function findBestDirectionGreedy(ghostPos, targetPos, isChasing) {
     return bestDir;
 }
 
-// Ghost update - uses A* pathfinding
+// Ghost update - uses A* pathfinding with personality-based targeting
 export function updateGhosts(delta) {
+    // Update Pac-Man's direction for personality calculations
+    updatePacmanDirection();
+    
     ghosts.forEach((ghost, index) => {
         // Update respawn timer
         if (ghost.respawnTime) {
@@ -280,48 +369,33 @@ export function updateGhosts(delta) {
         
         let moved = false;
         const ghostPos = ghost.mesh.position;
-        const pacPos = pacman.position;
         
         // Update path periodically (not every frame for performance)
         ghost.pathCheckTimer = (ghost.pathCheckTimer || 0) + delta;
         
-        if (ghost.pathCheckTimer > 0.2 || !ghost.nextTarget) {
+        // Update path more frequently when fleeing (0.1s) vs chasing (0.3s)
+        const pathUpdateInterval = isChasing ? 0.3 : 0.1;
+        if (ghost.pathCheckTimer > pathUpdateInterval || !ghost.nextTarget) {
             ghost.pathCheckTimer = 0;
             
             if (isChasing) {
-                // Use A* to find path to Pac-Man
-                const nextStep = findPath(ghostPos.x, ghostPos.z, pacPos.x, pacPos.z);
+                // Use personality-based targeting
+                const target = getPersonalityTarget(ghost);
+                const nextStep = findPath(ghostPos.x, ghostPos.z, target.x, target.z);
                 if (nextStep) {
                     ghost.nextTarget = new THREE.Vector3(nextStep.x, 0.5, nextStep.z);
                 } else {
                     ghost.nextTarget = null;
                 }
             } else {
-                // Fleeing: find path away from Pac-Man
-                // Pick a corner far from Pac-Man
-                const corners = [
-                    { x: -12, z: -12 },
-                    { x: 12, z: -12 },
-                    { x: -12, z: 12 },
-                    { x: 12, z: 12 }
-                ];
-                
-                // Find farthest corner from Pac-Man
-                let bestCorner = corners[0];
-                let bestDist = 0;
-                for (const corner of corners) {
-                    const dist = Math.abs(corner.x - pacPos.x) + Math.abs(corner.z - pacPos.z);
-                    if (dist > bestDist) {
-                        bestDist = dist;
-                        bestCorner = corner;
-                    }
-                }
-                
-                const nextStep = findPath(ghostPos.x, ghostPos.z, bestCorner.x, bestCorner.z);
+                // Fleeing: dynamically run away from Pac-Man
+                const fleeTarget = getFleeTarget(ghost);
+                const nextStep = findPath(ghostPos.x, ghostPos.z, fleeTarget.x, fleeTarget.z);
                 if (nextStep) {
                     ghost.nextTarget = new THREE.Vector3(nextStep.x, 0.5, nextStep.z);
                 } else {
-                    ghost.nextTarget = null;
+                    // If no path, just move directly away
+                    ghost.nextTarget = new THREE.Vector3(fleeTarget.x, 0.5, fleeTarget.z);
                 }
             }
         }
@@ -357,7 +431,9 @@ export function updateGhosts(delta) {
         
         // Fallback: use greedy if A* failed
         if (!moved) {
-            const bestDir = findBestDirectionGreedy(ghostPos, pacPos, isChasing);
+            const target = isChasing ? getPersonalityTarget(ghost) : getFleeTarget(ghost);
+            const targetPos = new THREE.Vector3(target.x, 0.5, target.z);
+            const bestDir = findBestDirectionGreedy(ghostPos, targetPos);
             if (bestDir) {
                 const movement = bestDir.multiplyScalar(ghost.speed * delta);
                 const newPos = ghostPos.clone().add(movement);
