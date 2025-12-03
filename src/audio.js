@@ -180,6 +180,55 @@ export function playDeathSound() {
     osc.stop(ctx.currentTime + 0.5);
 }
 
+// Jumpscare sound - loud chaotic screech
+export function playJumpscareSound() {
+    const ctx = getAudioContext();
+    
+    // Create multiple chaotic oscillators
+    const freqs = [800, 1200, 2000, 5000, 100];
+    const types = ['sawtooth', 'square', 'sawtooth', 'sawtooth', 'square'];
+    
+    freqs.forEach((f, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        
+        osc.type = types[i];
+        osc.frequency.value = f;
+        
+        // Aggressive frequency modulation
+        osc.frequency.exponentialRampToValueAtTime(f * 0.5, ctx.currentTime + 0.3);
+        
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1.5);
+        
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 1.5);
+    });
+    
+    // Add noise burst
+    const bufferSize = ctx.sampleRate * 1.0; // 1 second
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    
+    for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+    }
+    
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.8, ctx.currentTime);
+    noiseGain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1.0);
+    
+    noise.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+    noise.start(ctx.currentTime);
+}
+
 // Level complete sound - victory fanfare
 export function playLevelCompleteSound() {
     const ctx = getAudioContext();

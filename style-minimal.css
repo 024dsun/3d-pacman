@@ -12,3 +12,64 @@ body {
 canvas {
     display: block;
 }
+
+/* Jumpscare Overlay */
+#jumpscare-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: black;
+    z-index: 9999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: none;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Scary Face using pure CSS */
+.jumpscare-face {
+    width: 80vmin;
+    height: 80vmin;
+    background: 
+        /* Eyes */
+        radial-gradient(circle at 30% 35%, white 2%, transparent 4%),
+        radial-gradient(circle at 70% 35%, white 2%, transparent 4%),
+        radial-gradient(circle at 30% 35%, black 10%, transparent 12%),
+        radial-gradient(circle at 70% 35%, black 10%, transparent 12%),
+        radial-gradient(circle at 30% 35%, red 15%, transparent 20%),
+        radial-gradient(circle at 70% 35%, red 15%, transparent 20%),
+        /* Mouth */
+        radial-gradient(ellipse at 50% 70%, black 20%, transparent 22%),
+        radial-gradient(ellipse at 50% 70%, darkred 25%, transparent 30%);
+    
+    background-color: #111;
+    border-radius: 40%;
+    box-shadow: 
+        0 0 50px 20px red,
+        inset 0 0 100px black;
+    animation: shake 0.1s infinite;
+}
+
+@keyframes shake {
+    0% { transform: translate(0, 0) scale(1); }
+    25% { transform: translate(-5px, 5px) scale(1.1); }
+    50% { transform: translate(5px, -5px) scale(0.95); }
+    75% { transform: translate(-5px, -5px) scale(1.05); }
+    100% { transform: translate(5px, 5px) scale(1); }
+}
+
+/* Flash effect */
+.jumpscare-active {
+    animation: flash 0.1s infinite;
+}
+
+@keyframes flash {
+    0%, 100% { background-color: black; }
+    50% { background-color: #200; }
+}

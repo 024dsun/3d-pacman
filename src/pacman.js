@@ -9,12 +9,20 @@ import { createPacmanMesh } from './meshes.js';
 // Create Pacman
 export function createPacman() {
     const pacmanMesh = createPacmanMesh(0.5);
-    pacmanMesh.position.set(0, 0.5, 0);
+    pacmanMesh.position.set(0,0.5, 0);
     
-    // Point light attached to pacman (flashlight effect)
-    const light = new THREE.PointLight(0xffff00, 2, 15);
-    light.position.set(0, 0.5, 0);
-    scene.add(light);
+    // SpotLight attached to pacman (flashlight effect)
+    // Intensity 2, Distance 25, Angle 0.6 (~35 deg), Penumbra 0.5 (soft edges)
+    const light = new THREE.SpotLight(0xffaa00, 2, 25, 0.6, 0.5, 1);
+    light.position.set(0, 0.5, 0.2); // Slightly in front
+    light.target.position.set(0, 0.5, 5); // Point forward
+    light.castShadow = true;
+    light.shadow.mapSize.width = 1024;
+    light.shadow.mapSize.height = 1024;
+    
+    // Add light and its target to Pacman mesh so it rotates with him
+    pacmanMesh.add(light);
+    pacmanMesh.add(light.target);
     
     // Add to scene
     scene.add(pacmanMesh);
@@ -67,6 +75,5 @@ export function updatePacman(delta) {
         pacman.rotation.y = cameraYaw + Math.PI / 2;
     }
     
-    // Update light position to follow pacman
-    pacmanLight.position.set(pacman.position.x, pacman.position.y + 1, pacman.position.z);
+    // Light follows Pac-Man automatically since it's a child
 }

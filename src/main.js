@@ -35,13 +35,24 @@ function init() {
     setRenderer(newRenderer);
     
     // Lights
-    const ambientLight = new THREE.AmbientLight(0x6060a0, 0.5);
+    // Dim ambient light for horror atmosphere
+    const ambientLight = new THREE.AmbientLight(0x1a1a3a, 0.1);
     scene.add(ambientLight);
     setAmbientLight(ambientLight);
     
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
-    dirLight.position.set(10, 20, 10);
+    // Moon light (dim directional light)
+    const dirLight = new THREE.DirectionalLight(0x4a4a8a, 0.2);
+    dirLight.position.set(20, 50, 20);
     dirLight.castShadow = true;
+    // Improve shadow quality
+    dirLight.shadow.mapSize.width = 2048;
+    dirLight.shadow.mapSize.height = 2048;
+    dirLight.shadow.camera.near = 0.5;
+    dirLight.shadow.camera.far = 100;
+    dirLight.shadow.camera.left = -50;
+    dirLight.shadow.camera.right = 50;
+    dirLight.shadow.camera.top = 50;
+    dirLight.shadow.camera.bottom = -50;
     scene.add(dirLight);
     setDirectionalLight(dirLight);
     

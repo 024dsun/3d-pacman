@@ -15,7 +15,7 @@ import { createGhosts, clearAllGhosts, updateGhosts } from './ghosts.js';
 import { checkWallCollision } from './collision.js';
 import { updateHUD, showStartScreen, updateMinimap } from './ui.js';
 import { updateCamera } from './camera.js';
-import { playGhostEatenSound, playDeathSound, playLevelCompleteSound, updateHeartbeat, updateGhostAudio, stopGhostAudio } from './audio.js';
+import { playGhostEatenSound, playDeathSound, playLevelCompleteSound, playJumpscareSound, updateHeartbeat, updateGhostAudio, stopGhostAudio } from './audio.js';
 import { createGhostExplosion, createDeathEffect, screenShake, updateEffects } from './effects.js';
 
 // Reset level (lose life)
@@ -48,8 +48,8 @@ export function resetLevel() {
         if (checkWallCollision(ghost.mesh.position, 0.5)) {
             const safePositions = [
                 [-11, 0.5, -11], [11, 0.5, -11],
-                [-11, 0.5, 11], [11, 0.5, 11],
-                [0, 0.5, 0]
+                [-11, 0.5, 11], [11, 0.5, 11]
+                // Removed center position to avoid spawn killing Pac-Man
             ];
             
             for (let pos of safePositions) {
@@ -209,18 +209,56 @@ function checkGhostCollisions() {
             // Lose life
             else {
                 if (!ghost.respawnTime || ghost.respawnTime <= 0) {
-                    setLives(lives - 1);
-                    createDeathEffect(pacman.position.clone());
-                    screenShake(0.6, 0.5);
-                    playDeathSound();
-                    if (lives <= 0) {
-                        setGameOver(true);
-                        setGameStarted(false);
-                        showStartScreen(true);
-                        updateHUD();
-                    } else {
-                        resetLevel();
+                    // ALWAYS JUMPSCARE when dying
+                    
+                    // Play chaotic scream
+                    playJumpscareSound();
+                    
+                    // Show scary overlay
+                    const overlay = document.getElementById('jumpscare-overlay');
+                    if (overlay) {
+                        overlay.classList.remove('hidden');
+                        const face = overlay.querySelector('.jumpscare-face');
+                        if (face) face.classList.add('jumpscare-active');
                     }
+                    
+                    // Pause everything
+                    setIsPaused(true);
+                    
+                    // Wait 1.5 seconds then die
+                    setTimeout(() => {
+                        try {
+                            const overlay = document.getElementById('jumpscare-overlay');
+                            if (overlay) {
+                                overlay.classList.add('hidden');
+                                const face = overlay.querySelector('.jumpscare-face');
+                                if (face) face.classList.remove('jumpscare-active');
+                            }
+                            
+                            // Proceed with death logic
+                            const newLives = lives - 1;
+                            setLives(newLives);
+                            createDeathEffect(pacman.position.clone());
+                            screenShake(0.6, 0.5);
+                            playDeathSound();
+                            
+                            if (newLives <= 0) {
+                                setGameOver(true);
+                                setGameStarted(false);
+                                showStartScreen(true);
+                                updateHUD();
+                            } else {
+                                resetLevel();
+                            }
+                        } catch (e) {
+                            console.error("Error during jumpscare reset:", e);
+                        } finally {
+                            // ALWAYS unpause
+                            setIsPaused(false);
+                        }
+                    }, 1500);
+                    
+                    return; // Stop processing
                 }
             }
         }
