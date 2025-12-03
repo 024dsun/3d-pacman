@@ -4,7 +4,7 @@ import {
     setHudElement, setGameStarted, setGameOver, setScore, setLives, setCurrentLevel,
     setGameTime, setPowerUpActive, setPowerUpTimer, setGhostMultiplier
 } from './state.js';
-import { playStartSound, startBackgroundMusic, stopBackgroundMusic } from './audio.js';
+import { playStartSound, startBackgroundMusic, stopBackgroundMusic, stopGhostAudio } from './audio.js';
 
 // Start screen element
 let startScreen;
@@ -148,6 +148,7 @@ export function showStartScreen(isGameOver = false) {
     if (!startScreen) createStartScreen();
     startScreen.style.display = 'flex';
     stopBackgroundMusic(); // Stop music when showing start/game over screen
+    stopGhostAudio(); // Stop ghost sounds
     
     // Update text if game over
     if (isGameOver) {

@@ -15,7 +15,7 @@ import { createGhosts, clearAllGhosts, updateGhosts } from './ghosts.js';
 import { checkWallCollision } from './collision.js';
 import { updateHUD, showStartScreen, updateMinimap } from './ui.js';
 import { updateCamera } from './camera.js';
-import { playGhostEatenSound, playDeathSound, playLevelCompleteSound } from './audio.js';
+import { playGhostEatenSound, playDeathSound, playLevelCompleteSound, updateHeartbeat, updateGhostAudio, stopGhostAudio } from './audio.js';
 import { createGhostExplosion, createDeathEffect, screenShake, updateEffects } from './effects.js';
 
 // Reset level (lose life)
@@ -171,6 +171,15 @@ export function update(delta) {
     updateCamera();
     updateMinimap();
     updateEffects(delta);
+    
+    // Update 3D positional audio and heartbeat
+    let closestGhostDist = Infinity;
+    ghosts.forEach(ghost => {
+        const dist = pacman.position.distanceTo(ghost.mesh.position);
+        if (dist < closestGhostDist) closestGhostDist = dist;
+    });
+    updateHeartbeat(closestGhostDist);
+    updateGhostAudio(ghosts, pacman.position);
     
     // Update HUD periodically
     if (Math.floor(gameTime) !== Math.floor(gameTime - delta)) {

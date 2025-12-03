@@ -223,3 +223,185 @@ export function playStartSound() {
         osc.stop(ctx.currentTime + i * 0.1 + 0.2);
     });
 }
+
+// ============================================
+// HEARTBEAT & 3D POSITIONAL GHOST AUDIO
+// ============================================
+
+let heartbeatInterval = null;
+let ghostAudioNodes = new Map(); // Map ghost index to audio nodes
+
+// Start heartbeat system - intensity based on closest ghost distance
+export function startHeartbeat() {
+    if (heartbeatInterval) return;
+    
+    const ctx = getAudioContext();
+    let lastBeatTime = 0;
+    
+    heartbeatInterval = setInterval(() => {
+        // This will be called from game loop with distance
+    }, 50);
+}
+
+// Update heartbeat based on closest ghost distance (call this from game loop)
+let nextHeartbeatTime = 0;
+export function updateHeartbeat(closestGhostDistance) {
+    if (!audioContext) return;
+    
+    const ctx = getAudioContext();
+    const now = Date.now();
+    
+    // Calculate heartbeat intensity (0 = far/calm, 1 = very close/panic)
+    const maxDistance = 12;
+    const minDistance = 2;
+    const intensity = Math.max(0, Math.min(1, 
+        1 - (closestGhostDistance - minDistance) / (maxDistance - minDistance)
+    ));
+    
+    // Skip if too far (no heartbeat)
+    if (intensity <= 0) return;
+    
+    // Heartbeat rate: 60 BPM when far, up to 180 BPM when very close
+    const bpm = 60 + intensity * 120;
+    const beatInterval = 60000 / bpm;
+    
+    if (now >= nextHeartbeatTime) {
+        nextHeartbeatTime = now + beatInterval;
+        playHeartbeat(intensity);
+    }
+}
+
+// Play a single heartbeat (two thumps)
+function playHeartbeat(intensity) {
+    const ctx = getAudioContext();
+    const volume = 0.05 + intensity * 0.25; // Louder when closer
+    
+    // First thump (louder)
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = 'sine';
+    osc1.frequency.value = 40 + intensity * 20; // Higher pitch when panicked
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    gain1.gain.setValueAtTime(volume, ctx.currentTime);
+    gain1.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+    osc1.start(ctx.currentTime);
+    osc1.stop(ctx.currentTime + 0.15);
+    
+    // Second thump (softer, slightly delayed)
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.value = 35 + intensity * 15;
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    gain2.gain.setValueAtTime(volume * 0.6, ctx.currentTime + 0.12);
+    gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+    osc2.start(ctx.currentTime + 0.12);
+    osc2.stop(ctx.currentTime + 0.25);
+}
+
+// Stop heartbeat
+export function stopHeartbeat() {
+    if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+    }
+    nextHeartbeatTime = 0;
+}
+
+// ============================================
+// 3D POSITIONAL GHOST AUDIO - Spooky whispers/drones
+// ============================================
+
+let ghostSoundNodes = [];
+let ghostSoundUpdateInterval = null;
+
+// Initialize ghost positional audio system
+export function initGhostAudio() {
+    // Will be updated each frame
+}
+
+// Update ghost 3D audio based on positions (call from game loop)
+export function updateGhostAudio(ghosts, pacmanPosition) {
+    if (!audioContext) return;
+    
+    const ctx = getAudioContext();
+    
+    ghosts.forEach((ghost, index) => {
+        const ghostPos = ghost.mesh.position;
+        const distance = pacmanPosition.distanceTo(ghostPos);
+        
+        // Calculate direction for panning (-1 = left, 1 = right)
+        const dx = ghostPos.x - pacmanPosition.x;
+        const dz = ghostPos.z - pacmanPosition.z;
+        // Simple stereo panning based on x difference
+        const pan = Math.max(-1, Math.min(1, dx / 10));
+        
+        // Volume based on distance (louder when closer)
+        const maxDist = 15;
+        const minDist = 1;
+        const volume = Math.max(0, Math.min(1, 
+            1 - (distance - minDist) / (maxDist - minDist)
+        )) * 0.15;
+        
+        // Create or update ghost sound
+        if (!ghostSoundNodes[index] && volume > 0.01) {
+            // Create spooky drone for this ghost
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            const panner = ctx.createStereoPanner();
+            const filter = ctx.createBiquadFilter();
+            
+            // Each ghost has slightly different frequency for variety
+            const baseFreq = 80 + index * 15;
+            osc.type = 'sawtooth';
+            osc.frequency.value = baseFreq;
+            
+            // Low-pass filter for muffled, spooky sound
+            filter.type = 'lowpass';
+            filter.frequency.value = 200 + index * 50;
+            filter.Q.value = 5;
+            
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(panner);
+            panner.connect(ctx.destination);
+            
+            gain.gain.value = 0;
+            panner.pan.value = pan;
+            
+            osc.start();
+            
+            ghostSoundNodes[index] = { osc, gain, panner, filter };
+        }
+        
+        // Update existing sound
+        if (ghostSoundNodes[index]) {
+            const node = ghostSoundNodes[index];
+            // Smooth volume transition
+            node.gain.gain.setTargetAtTime(volume, ctx.currentTime, 0.1);
+            node.panner.pan.setTargetAtTime(pan, ctx.currentTime, 0.1);
+            
+            // Modulate filter based on distance (more muffled when far)
+            const filterFreq = 100 + (1 - distance / maxDist) * 400;
+            node.filter.frequency.setTargetAtTime(filterFreq, ctx.currentTime, 0.1);
+            
+            // Add slight pitch wobble for creepiness
+            const wobble = Math.sin(Date.now() * 0.002 + index) * 5;
+            node.osc.frequency.setTargetAtTime(80 + index * 15 + wobble, ctx.currentTime, 0.1);
+        }
+    });
+}
+
+// Stop all ghost audio
+export function stopGhostAudio() {
+    ghostSoundNodes.forEach(node => {
+        if (node) {
+            try {
+                node.osc.stop();
+            } catch(e) {}
+        }
+    });
+    ghostSoundNodes = [];
+}

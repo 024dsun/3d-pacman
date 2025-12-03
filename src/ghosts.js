@@ -334,7 +334,7 @@ export function updateGhosts(delta) {
         
         // Visibility based on distance (horror effect)
         const distToPacman = ghost.mesh.position.distanceTo(pacman.position);
-        const visibilityRange = 10;
+        const visibilityRange = 7;
         if (distToPacman > visibilityRange) {
             ghost.mesh.visible = false;
         } else {
