@@ -4,6 +4,7 @@ import {
     addGhost, clearGhosts
 } from './state.js';
 import { checkWallCollision } from './collision.js';
+import { createGhostMesh, updateGhostEyes } from './meshes.js';
 
 // Create ghosts
 export function createGhosts() {
@@ -43,13 +44,7 @@ export function createGhosts() {
     
     // Create ghosts
     colors.forEach((color, i) => {
-        const geometry = new THREE.SphereGeometry(0.5, 32, 32);
-        const material = new THREE.MeshStandardMaterial({ 
-            color: color,
-            emissive: color,
-            emissiveIntensity: 0.3
-        });
-        const ghostMesh = new THREE.Mesh(geometry, material);
+        const ghostMesh = createGhostMesh(0.5, color);
         
         // Validate spawn position
         let spawnPos = positions[i];
@@ -340,21 +335,30 @@ export function updateGhosts(delta) {
         } else {
             ghost.mesh.visible = true;
             const opacity = 1 - (distToPacman / visibilityRange) * 0.5;
-            ghost.mesh.material.opacity = opacity;
-            ghost.mesh.material.transparent = true;
+            
+            // Handle opacity for Group mesh (apply to all children materials)
+            ghost.mesh.traverse((child) => {
+                if (child.isMesh && child.material) {
+                    child.material.opacity = opacity;
+                    child.material.transparent = true;
+                }
+            });
         }
         
         // Update color based on state
-        if (ghost.respawnTime && ghost.respawnTime > 0) {
-            const flash = Math.sin(Date.now() * 0.02) > 0;
-            ghost.mesh.material.color.setHex(flash ? 0xffffff : ghost.color);
-            ghost.mesh.material.emissive.setHex(flash ? 0xffffff : ghost.color);
-        } else if (powerUpActive && !ghost.immuneToPowerUp) {
-            ghost.mesh.material.color.setHex(0x0000ff);
-            ghost.mesh.material.emissive.setHex(0x0000ff);
-        } else {
-            ghost.mesh.material.color.setHex(ghost.color);
-            ghost.mesh.material.emissive.setHex(ghost.color);
+        const mat = ghost.mesh.userData.bodyMaterial;
+        if (mat) {
+            if (ghost.respawnTime && ghost.respawnTime > 0) {
+                const flash = Math.sin(Date.now() * 0.02) > 0;
+                mat.color.setHex(flash ? 0xffffff : ghost.color);
+                mat.emissive.setHex(flash ? 0xffffff : ghost.color);
+            } else if (powerUpActive && !ghost.immuneToPowerUp) {
+                mat.color.setHex(0x0000ff);
+                mat.emissive.setHex(0x0000ff);
+            } else {
+                mat.color.setHex(ghost.color);
+                mat.emissive.setHex(ghost.color);
+            }
         }
         
         // Determine if chasing or fleeing
@@ -450,5 +454,14 @@ export function updateGhosts(delta) {
         
         // Bob animation
         ghost.mesh.position.y = 0.5 + Math.sin(Date.now() * 0.003 + index) * 0.1;
+        
+        // Look at Pac-Man (Body rotation)
+        // We only want to rotate around Y axis so they don't tilt up/down
+        const lookTarget = pacman.position.clone();
+        lookTarget.y = ghost.mesh.position.y; 
+        ghost.mesh.lookAt(lookTarget);
+        
+        // Update eyes (Independent tracking for extra creepiness)
+        updateGhostEyes(ghost.mesh, pacman.position);
     });
 }

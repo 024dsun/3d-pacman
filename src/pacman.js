@@ -4,25 +4,12 @@ import {
     setPacman, setPacmanLight
 } from './state.js';
 import { checkWallCollision } from './collision.js';
+import { createPacmanMesh } from './meshes.js';
 
 // Create Pacman
 export function createPacman() {
-    const geometry = new THREE.SphereGeometry(0.5, 32, 32);
-    const material = new THREE.MeshStandardMaterial({ 
-        color: 0xffff00,
-        emissive: 0xffff00,
-        emissiveIntensity: 0.4
-    });
-    const pacmanMesh = new THREE.Mesh(geometry, material);
+    const pacmanMesh = createPacmanMesh(0.5);
     pacmanMesh.position.set(0, 0.5, 0);
-    pacmanMesh.castShadow = true;
-    
-    // Add eye
-    const eyeGeometry = new THREE.SphereGeometry(0.08, 8, 8);
-    const eyeMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 });
-    const eye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-    eye.position.set(0, 0.2, 0.4);
-    pacmanMesh.add(eye);
     
     // Point light attached to pacman (flashlight effect)
     const light = new THREE.PointLight(0xffff00, 2, 15);
