@@ -34,7 +34,7 @@ export let baseGhostSpeed = 2;
 export let keys = {};
 
 // Camera settings
-export let cameraMode = 2;
+export let cameraMode = 3;
 export let mouseX = 0;
 export let mouseY = 0;
 export let cameraYaw = 0;

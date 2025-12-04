@@ -38,16 +38,21 @@ export function createGhosts() {
             [-11, 0.5, -12],
             [11, 0.5, -12],
             [-11, 0.5, 12],
-            [11, 0.5, 12]
+            [11, 0.5, 12],
+            [-8, 0.5, 0],
+            [8, 0.5, 0],
+            [0, 0.5, -8],
+            [0, 0.5, 8]
         ];
     }
     
     // Create ghosts
-    colors.forEach((color, i) => {
+    positions.forEach((spawnPos, i) => {
+        i = i % colors.length
+        let color = colors[i];
         const ghostMesh = createGhostMesh(0.5, color);
         
         // Validate spawn position
-        let spawnPos = positions[i];
         const testPos = new THREE.Vector3(...spawnPos);
         if (checkWallCollision(testPos, 0.5)) {
             // Find alternative safe position

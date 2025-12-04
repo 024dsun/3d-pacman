@@ -45,92 +45,71 @@ export function getMazeLayout(level) {
             [14, 0, -8, 1, wallHeight, 12],
             [14, 0, 8, 1, wallHeight, 12],
             
-            // Horizontal corridors creating maze paths
-            [-8, 0, -10, 10, wallHeight, 1],
-            [4, 0, -10, 10, wallHeight, 1],
-            
-            [-10, 0, -6, 4, wallHeight, 1],
+            // horizontal walls
+            [-8 , 0, -10, 5, wallHeight, 1],
             [2, 0, -6, 4, wallHeight, 1],
-            [8, 0, -6, 8, wallHeight, 1],
-            
-            [-12, 0, -2, 8, wallHeight, 1],
+            [-12, 0, -2, 5, wallHeight, 1],
             [4, 0, -2, 8, wallHeight, 1],
-            
             [-6, 0, 2, 6, wallHeight, 1],
             [4, 0, 2, 6, wallHeight, 1],
-            
             [-10, 0, 6, 4, wallHeight, 1],
-            [2, 0, 6, 4, wallHeight, 1],
-            [8, 0, 6, 8, wallHeight, 1],
+            [8, 0, 6, 5, wallHeight, 1],
+            [-8, 0, 10, 9, wallHeight, 1],
+            [4, 0, 10, 5, wallHeight, 1],
             
-            [-8, 0, 10, 10, wallHeight, 1],
-            [4, 0, 10, 10, wallHeight, 1],
-            
-            // Vertical corridors creating maze paths
+            // vertical walls
             [-10, 0, -4, 1, wallHeight, 8],
             [-6, 0, -8, 1, wallHeight, 10],
-            [-2, 0, -12, 1, wallHeight, 6],
+            [-2, 0, -12, 1, wallHeight, 4],
             [-2, 0, 4, 1, wallHeight, 8],
             [2, 0, -8, 1, wallHeight, 6],
             [2, 0, 4, 1, wallHeight, 12],
-            [6, 0, -12, 1, wallHeight, 8],
-            [6, 0, 8, 1, wallHeight, 8],
+            [6, 0, -11, 1, wallHeight, 4],
+            [6, 0, 8, 1, wallHeight, 4],
             [10, 0, -4, 1, wallHeight, 8],
-            [10, 0, 8, 1, wallHeight, 8]
+            [10, 0, 8, 1, wallHeight, 4]
         ];
     } else if (level === 3) {
         // Level 3: Complex winding maze (with teleport gaps)
         return [
             // Outer walls with teleport gaps
-            [0, 0, -14, 30, wallHeight, 1],
-            [0, 0, 14, 30, wallHeight, 1],
-            [-14, 0, -8, 1, wallHeight, 12],
-            [-14, 0, 8, 1, wallHeight, 12],
-            [14, 0, -8, 1, wallHeight, 12],
-            [14, 0, 8, 1, wallHeight, 12],
+            // [0, 0, -14, 30, wallHeight, 1],
+            // [0, 0, 14, 30, wallHeight, 1],
+            // [-14, 0, -8, 1, wallHeight, 12],
+            // [-14, 0, 8, 1, wallHeight, 12],
+            // [14, 0, -8, 1, wallHeight, 12],
+            // [14, 0, 8, 1, wallHeight, 12],
             
-            // Create winding S-shaped corridors
-            // Top section
-            [-10, 0, -10, 8, wallHeight, 1],
-            [6, 0, -10, 12, wallHeight, 1],
-            [-8, 0, -8, 1, wallHeight, 4],
-            [4, 0, -8, 1, wallHeight, 4],
-            [10, 0, -6, 1, wallHeight, 8],
+            // // Create winding S-shaped corridors
+            // // Top section
+            // [-10, 0, -10, 8, wallHeight, 1],
+            // [6, 0, -10, 12, wallHeight, 1],
+            // [-8, 0, -8, 1, wallHeight, 4],
+            // [4, 0, -8, 1, wallHeight, 4],
+            // [10, 0, -6, 1, wallHeight, 8],
             
-            // Upper middle
-            [-12, 0, -6, 4, wallHeight, 1],
-            [-4, 0, -6, 1, wallHeight, 6],
-            [2, 0, -6, 10, wallHeight, 1],
-            [-10, 0, -2, 1, wallHeight, 8],
-            [6, 0, -4, 1, wallHeight, 4],
+            // // Upper middle
+            // [-12, 0, -6, 4, wallHeight, 1],
+            // [-4, 0, -6, 1, wallHeight, 6],
+            // [2, 0, -6, 10, wallHeight, 1],
+            // [-10, 0, -2, 1, wallHeight, 8],
+            // [6, 0, -4, 1, wallHeight, 4],
             
-            // Center section - create some rooms
-            [-6, 0, -2, 8, wallHeight, 1],
-            [6, 0, -2, 4, wallHeight, 1],
-            [-2, 0, 0, 1, wallHeight, 4],
-            [8, 0, 0, 1, wallHeight, 8],
+            // // Lower middle
+            // [-12, 0, 2, 6, wallHeight, 1],
+            // [0, 0, 2, 8, wallHeight, 1],
+            // [-8, 0, 4, 1, wallHeight, 4],
+            // [2, 0, 4, 1, wallHeight, 8],
+            // [10, 0, 2, 1, wallHeight, 4],
             
-            // Lower middle
-            [-12, 0, 2, 6, wallHeight, 1],
-            [0, 0, 2, 8, wallHeight, 1],
-            [-8, 0, 4, 1, wallHeight, 4],
-            [2, 0, 4, 1, wallHeight, 8],
-            [10, 0, 2, 1, wallHeight, 4],
-            
-            // Bottom section
-            [-10, 0, 6, 1, wallHeight, 8],
-            [-4, 0, 6, 8, wallHeight, 1],
-            [8, 0, 6, 8, wallHeight, 1],
-            [-6, 0, 8, 1, wallHeight, 4],
-            [4, 0, 8, 1, wallHeight, 4],
-            [-10, 0, 10, 8, wallHeight, 1],
-            [6, 0, 10, 12, wallHeight, 1],
-            
-            // Add some isolated pillars for challenge
-            [-2, 0, -10, 2, wallHeight, 2],
-            [0, 0, -4, 2, wallHeight, 2],
-            [-8, 0, 8, 2, wallHeight, 2],
-            [4, 0, 10, 2, wallHeight, 2]
+            // // Bottom section
+            // [-10, 0, 6, 1, wallHeight, 8],
+            // [-4, 0, 6, 8, wallHeight, 1],
+            // [8, 0, 6, 8, wallHeight, 1],
+            // [-6, 0, 8, 1, wallHeight, 4],
+            // [4, 0, 8, 1, wallHeight, 4],
+            // [-10, 0, 10, 8, wallHeight, 1],
+            // [6, 0, 10, 12, wallHeight, 1],
         ];
     }
     
