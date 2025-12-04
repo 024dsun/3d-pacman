@@ -362,8 +362,8 @@ export function updateGhosts(delta) {
         }
         
         // Determine if chasing or fleeing
-        const isVulnerable = powerUpActive && !ghost.immuneToPowerUp;
-        const isChasing = !isVulnerable;
+        // ALL ghosts flee when power-up is active (even immune ones)
+        const isChasing = !powerUpActive;
         
         // Skip movement if respawning
         if (ghost.respawnTime && ghost.respawnTime > 0) {

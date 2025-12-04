@@ -18,22 +18,25 @@ import { updateCamera } from './camera.js';
 import { playGhostEatenSound, playDeathSound, playLevelCompleteSound, playJumpscareSound, updateHeartbeat, updateGhostAudio, stopGhostAudio } from './audio.js';
 import { createGhostExplosion, createDeathEffect, screenShake, updateEffects } from './effects.js';
 
-// Reset level (lose life)
-export function resetLevel() {
-    // Reset state
-    setScore(0);
+// Flag to prevent multiple death triggers
+let isDeathSequenceActive = false;
+
+// Reset positions after losing a life (keeps score and pellets)
+export function resetAfterDeath() {
+    // Reset power-up state
     setPowerUpActive(false);
     setPowerUpTimer(0);
+    setGhostMultiplier(1);
+    
+    // Reset Pac-Man position
     pacman.position.set(0, 0.5, 0);
     pacman.rotation.y = 0;
     pacman.scale.set(1, 1, 1);
     
-    // Clear and recreate pellets
-    clearAllPellets();
-    createPellets();
-    
-    // Reset ghosts
+    // Reset ghosts to their starting positions
     ghosts.forEach(ghost => {
+        if (!ghost || !ghost.mesh) return;
+        
         ghost.mesh.position.set(...ghost.startPosition);
         ghost.respawnTime = 0;
         ghost.immuneToPowerUp = false;
@@ -41,29 +44,42 @@ export function resetLevel() {
         ghost.lastPosition.set(...ghost.startPosition);
         ghost.lastPacmanPos = null;
         ghost.preferredDirection = null;
-        ghost.mesh.material.color.setHex(ghost.color);
-        ghost.mesh.material.emissive.setHex(ghost.color);
+        ghost.nextTarget = null;
+        ghost.pathCheckTimer = 0;
+        ghost.mesh.visible = true;
         
-        // Ensure spawn position is valid
-        if (checkWallCollision(ghost.mesh.position, 0.5)) {
-            const safePositions = [
-                [-11, 0.5, -11], [11, 0.5, -11],
-                [-11, 0.5, 11], [11, 0.5, 11]
-                // Removed center position to avoid spawn killing Pac-Man
-            ];
-            
-            for (let pos of safePositions) {
-                const testPos = new THREE.Vector3(...pos);
-                if (!checkWallCollision(testPos, 0.5)) {
-                    ghost.mesh.position.copy(testPos);
-                    ghost.startPosition = pos.slice();
-                    break;
-                }
-            }
+        // Safely reset material properties
+        if (ghost.mesh.material) {
+            if (ghost.mesh.material.color) ghost.mesh.material.color.setHex(ghost.color);
+            if (ghost.mesh.material.emissive) ghost.mesh.material.emissive.setHex(ghost.color);
+            ghost.mesh.material.opacity = 1;
         }
     });
     
     updateHUD();
+}
+
+// Full level reset (for new game)
+export function resetLevel() {
+    // Reset flags
+    isDeathSequenceActive = false;
+    
+    // Make sure jumpscare overlay is hidden and reset
+    const overlay = document.getElementById('jumpscare-overlay');
+    if (overlay) {
+        overlay.style.display = '';  // Clear inline style
+        overlay.classList.add('hidden');
+    }
+    
+    // Reset score
+    setScore(0);
+    
+    // Clear and recreate pellets
+    clearAllPellets();
+    createPellets();
+    
+    // Reset positions
+    resetAfterDeath();
 }
 
 // Advance to next level
@@ -192,6 +208,7 @@ function checkGhostCollisions() {
     for (let ghost of ghosts) {
         const dist = pacman.position.distanceTo(ghost.mesh.position);
         if (dist < 1.0) {
+            console.log("COLLISION! dist:", dist, "powerUpActive:", powerUpActive, "respawnTime:", ghost.respawnTime, "isDeathSequenceActive:", isDeathSequenceActive);
             const ghostVulnerable = powerUpActive && !ghost.immuneToPowerUp;
             // Eat the ghost
             if (ghostVulnerable) {
@@ -209,6 +226,10 @@ function checkGhostCollisions() {
             // Lose life
             else {
                 if (!ghost.respawnTime || ghost.respawnTime <= 0) {
+                    // Prevent multiple death triggers
+                    if (isDeathSequenceActive) return;
+                    isDeathSequenceActive = true;
+                    
                     // ALWAYS JUMPSCARE when dying
                     
                     // Play chaotic scream
@@ -225,37 +246,45 @@ function checkGhostCollisions() {
                     // Pause everything
                     setIsPaused(true);
                     
-                    // Wait 1.5 seconds then die
-                    setTimeout(() => {
-                        try {
-                            const overlay = document.getElementById('jumpscare-overlay');
-                            if (overlay) {
-                                overlay.classList.add('hidden');
-                                const face = overlay.querySelector('.jumpscare-face');
-                                if (face) face.classList.remove('jumpscare-active');
-                            }
-                            
-                            // Proceed with death logic
-                            const newLives = lives - 1;
-                            setLives(newLives);
-                            createDeathEffect(pacman.position.clone());
-                            screenShake(0.6, 0.5);
-                            playDeathSound();
-                            
-                            if (newLives <= 0) {
-                                setGameOver(true);
-                                setGameStarted(false);
-                                showStartScreen(true);
-                                updateHUD();
-                            } else {
-                                resetLevel();
-                            }
-                        } catch (e) {
-                            console.error("Error during jumpscare reset:", e);
-                        } finally {
-                            // ALWAYS unpause
-                            setIsPaused(false);
+                    // Save death position
+                    const deathPos = pacman.position.clone();
+                    
+                    console.log("DEATH: Starting jumpscare sequence");
+                    
+                    // Wait 1.5 seconds for jumpscare then continue
+                    window.setTimeout(() => {
+                        console.log("DEATH: Timeout fired, hiding overlay");
+                        
+                        // Hide overlay
+                        const overlay = document.getElementById('jumpscare-overlay');
+                        if (overlay) {
+                            overlay.style.display = '';  // Clear inline style
+                            overlay.classList.add('hidden');
                         }
+                        
+                        // Reset positions
+                        resetAfterDeath();
+                        
+                        // Handle death logic
+                        console.log("DEATH: Current lives before:", lives);
+                        const newLives = lives - 1;
+                        console.log("DEATH: New lives:", newLives);
+                        setLives(newLives);
+                        playDeathSound();
+                        
+                        if (newLives <= 0) {
+                            console.log("DEATH: Game over!");
+                            setGameOver(true);
+                            setGameStarted(false);
+                            showStartScreen(true);
+                        }
+                        updateHUD();
+                        
+                        // Unpause and allow new deaths
+                        setIsPaused(false);
+                        isDeathSequenceActive = false;
+                        
+                        console.log("DEATH: Sequence complete, isPaused:", isPaused, "isDeathSequenceActive:", isDeathSequenceActive);
                     }, 1500);
                     
                     return; // Stop processing
