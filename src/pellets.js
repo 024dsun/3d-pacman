@@ -38,14 +38,14 @@ export function createPellets() {
         }
     }
     
-    const powerUpPositions = [
+    const powerUpPos = [
         [-12, 0.5, -12],
         [12, 0.5, -12],
         [-12, 0.5, 12],
         [12, 0.5, 12]
     ];
     
-    powerUpPositions.forEach(pos => {
+    powerUpPos.forEach(pos => {
         const testPos = new THREE.Vector3(...pos);
         if (!checkWallCollisionSimple(testPos)) {
             const powerUp = new THREE.Mesh(powerUpGeometry, powerUpMaterial);

@@ -43,12 +43,15 @@ export function updatePacman(delta) {
         if (keys['w'] || keys['arrowup']) {
             velocity.z -= 1;
         }
+
         if (keys['s'] || keys['arrowdown']) {
             velocity.z += 1;
         }
+
         if (keys['a'] || keys['arrowleft']) {
             velocity.x -= 1;
         }
+
         if (keys['d'] || keys['arrowright']) {
             velocity.x += 1;
         }
@@ -59,15 +62,19 @@ export function updatePacman(delta) {
         forward.y = 0;
         forward.normalize();
         const right = new THREE.Vector3().crossVectors(camera.up, forward).normalize();
+        
         if (keys['w'] || keys['arrowup']) {
             velocity.add(forward);
         }
+
         if (keys['s'] || keys['arrowdown']) {
             velocity.sub(forward);
         }
+
         if (keys['a'] || keys['arrowleft']) {
             velocity.add(right);
         }
+
         if (keys['d'] || keys['arrowright']) {
             velocity.sub(right);
         }
@@ -76,9 +83,11 @@ export function updatePacman(delta) {
     if (velocity.length() > 0) {
         velocity.normalize().multiplyScalar(pacmanSpeed * delta);
         const newPos = pacman.position.clone().add(velocity);
+
         if (!checkWallCollision(newPos)) {
             pacman.position.copy(newPos);
         }
+
         if (cameraMode !== 3) {
             const angle = Math.atan2(velocity.z, velocity.x);
             pacman.rotation.y = -angle;

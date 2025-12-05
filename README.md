@@ -25,6 +25,7 @@ Open http://localhost:5173
 ## Features
 
 - 3D maze with horror atmosphere
+- Minimap
 - 4 ghosts with custom chase/flee behavior
 - Power-ups (ghosts turn blue, can eat them)
 - Difficulty scaling (ghosts speed up over time)

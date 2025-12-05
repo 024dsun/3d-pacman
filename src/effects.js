@@ -68,19 +68,13 @@ export function createDeathEffect(position) {
             transparent: true,
             opacity: 1
         });
-
         const particle = new THREE.Mesh(geometry, material);
         particle.position.copy(position);
         particle.position.y += Math.random() * 0.5;
         
         const angle = (i / 40) * Math.PI * 2;
         const speed = 3 + Math.random() * 2;
-        const velocity = new THREE.Vector3(
-            Math.cos(angle) * speed,
-            Math.random() * 2 + 1,
-            Math.sin(angle) * speed
-        );
-        
+        const velocity = new THREE.Vector3(Math.cos(angle) * speed, Math.random() * 2 + 1, Math.sin(angle) * speed);
         scene.add(particle);
         particles.push({
             mesh: particle,
@@ -93,19 +87,18 @@ export function createDeathEffect(position) {
 
 export function updateParticles(delta) {
     for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i];
 
-        p.velocity.y -= 10 * delta;
-        p.mesh.position.add(p.velocity.clone().multiplyScalar(delta));
-        p.life -= p.decay * delta;
+        particles[i].velocity.y -= 10 * delta;
+        particles[i].mesh.position.add(particles[i].velocity.clone().multiplyScalar(delta));
+        particles[i].life -= particles[i].decay * delta;
 
-        p.mesh.material.opacity = Math.max(0, p.life);
-        p.mesh.scale.setScalar(p.life);
+        particles[i].mesh.material.opacity = Math.max(0, particles[i].life);
+        particles[i].mesh.scale.setScalar(particles[i].life);
 
-        if (p.life <= 0) {
-            scene.remove(p.mesh);
-            p.mesh.geometry.dispose();
-            p.mesh.material.dispose();
+        if (particles[i].life <= 0) {
+            scene.remove(particles[i].mesh);
+            particles[i].mesh.geometry.dispose();
+            particles[i].mesh.material.dispose();
             particles.splice(i, 1);
         }
     }
@@ -120,10 +113,10 @@ export function screenShake(intensity = 0.3, duration = 0.3) {
 export function updateScreenShake(delta) {
     if (shakeDuration > 0) {
         shakeDuration -= delta;
-        const shake = (Math.random() - 0.5) * shakeIntensity * 2;
-        camera.position.x += shake;
-        camera.position.y += shake;
-        camera.position.z += shake;
+        const s = (Math.random() - 0.5) * shakeIntensity * 2;
+        camera.position.x += s;
+        camera.position.y += s;
+        camera.position.z += s;
         shakeIntensity *= 0.95;
         if (shakeDuration <= 0) {
             shakeIntensity = 0;
@@ -132,6 +125,7 @@ export function updateScreenShake(delta) {
 }
 
 // dynamic lighting based on distance to ghosts
+// credit to claude for the idea and help in implementation
 export function updateDynamicLighting() {
     if (!ambientLight || !directionalLight || !pacman || !ghosts) {
         return;
@@ -147,16 +141,14 @@ export function updateDynamicLighting() {
     
     const maxDist = 8;
     const minDist = 1;
-    const darkness = Math.max(0, Math.min(1, 
-        1 - (closestDist - minDist) / (maxDist - minDist)
-    ));
+    const d = Math.max(0, Math.min(1, 1 - (closestDist - minDist) / (maxDist - minDist)));
     
-    const targetAmbient = baseLightIntensity.ambient - darkness * (baseLightIntensity.ambient - minLightIntensity.ambient);
-    const targetDirectional = baseLightIntensity.directional - darkness * (baseLightIntensity.directional - minLightIntensity.directional);
-    ambientLight.intensity += (targetAmbient - ambientLight.intensity) * 0.1;
-    directionalLight.intensity += (targetDirectional - directionalLight.intensity) * 0.1;
-    if (darkness > 0.5) {
-        const redShift = (darkness - 0.5) * 2;
+    const tarAmb = baseLightIntensity.ambient - d * (baseLightIntensity.ambient - minLightIntensity.ambient);
+    const tarDir = baseLightIntensity.directional - d * (baseLightIntensity.directional - minLightIntensity.directional);
+    ambientLight.intensity += (tarAmb - ambientLight.intensity) * 0.1;
+    directionalLight.intensity += (tarDir - directionalLight.intensity) * 0.1;
+    if (d > 0.5) {
+        const redShift = (d - 0.5) * 2;
         const r = Math.floor(0x60 + redShift * 0x40);
         const g = Math.floor(0x60 - redShift * 0x30);
         const b = Math.floor(0xa0 - redShift * 0x60);
