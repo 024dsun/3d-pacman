@@ -1,6 +1,4 @@
-import { keys, renderer, gameOver, isPaused, cameraMode, isPointerLocked } from './state.js';
-import { setCameraMode, setIsPaused, setCameraYaw, setCameraPitch, setIsPointerLocked } from './state.js';
-import { cameraYaw, cameraPitch } from './state.js';
+import { keys, renderer, gameOver, isPaused, cameraMode, isPointerLocked, setCameraMode, setIsPaused, setCameraYaw, setCameraPitch, setIsPointerLocked, cameraYaw, cameraPitch } from './state.js';
 import { updateHUD } from './ui.js';
 
 export function setupInput() {

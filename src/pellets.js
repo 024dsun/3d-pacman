@@ -1,7 +1,5 @@
 import * as THREE from 'three';
-import { scene, pacman, pellets, powerUps, score, powerUpActive, powerUpTimer, ghostMultiplier, ghosts } from './state.js';
-import { setScore, setPowerUpActive, setPowerUpTimer, setGhostMultiplier } from './state.js';
-import { addPellet, addPowerUp, removePellet, removePowerUp, clearPellets, clearPowerUps } from './state.js';
+import { scene, pacman, pellets, powerUps, score, powerUpActive, powerUpTimer, ghostMultiplier, ghosts, setScore, setPowerUpActive, setPowerUpTimer, setGhostMultiplier, addPellet, addPowerUp, removePellet, removePowerUp, clearPellets, clearPowerUps } from './state.js';
 import { checkWallCollisionSimple } from './collision.js';
 import { updateHUD } from './ui.js';
 import { playPelletSound, playPowerUpSound } from './audio.js';

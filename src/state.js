@@ -36,7 +36,6 @@ export let hudElement;
 export let pacmanLight;
 export let ambientLight;
 export let directionalLight;
-
 // a whole chain of setter functions for all of these variables
 export function setScene(s) { 
     scene = s; 

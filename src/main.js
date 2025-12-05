@@ -1,15 +1,5 @@
 import * as THREE from 'three';
-import { setScene } from './state.js';
-import { setCamera } from './state.js';
-import { setRenderer } from './state.js';
-import { setClock } from './state.js';
-import { setFloor } from './state.js';
-import { setAmbientLight } from './state.js';
-import { setDirectionalLight } from './state.js';
-import { scene } from './state.js';
-import { camera } from './state.js';
-import { renderer } from './state.js';
-import { clock } from './state.js';
+import { setScene, setCamera, setRenderer, setClock, setFloor, setAmbientLight, setDirectionalLight, scene, camera, renderer, clock } from './state.js';
 import { createMaze } from './maze.js';
 import { createTeleportZones } from './teleport.js';
 import { createPacman } from './pacman.js';

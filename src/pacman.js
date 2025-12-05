@@ -1,6 +1,5 @@
 import * as THREE from 'three';
-import { scene, pacman, pacmanSpeed, pacmanLight, keys, cameraMode, camera, cameraYaw } from './state.js';
-import { setPacman, setPacmanLight } from './state.js';
+import { scene, pacman, pacmanSpeed, pacmanLight, keys, cameraMode, camera, cameraYaw, setPacman, setPacmanLight } from './state.js';
 import { checkWallCollision } from './collision.js';
 import { createPacmanMesh } from './meshes.js';
 

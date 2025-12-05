@@ -1,9 +1,5 @@
 import * as THREE from 'three';
-import { scene, pacman, ghosts, pellets, powerUps, walls, floor, lives } from './state.js';
-import { gameStarted, gameOver, isPaused, powerUpActive, powerUpTimer, ghostMultiplier } from './state.js';
-import { gameTime, baseGhostSpeed, currentLevel, score } from './state.js';
-import { setGameOver, setIsPaused, setPowerUpActive, setPowerUpTimer, setGhostMultiplier, setGameTime, setCurrentLevel, setScore, setLives, setGameStarted } from './state.js';
-import { clearPellets, clearPowerUps, clearWalls, clearGhosts } from './state.js';
+import { scene, pacman, ghosts, pellets, powerUps, walls, floor, lives, gameStarted, gameOver, isPaused, powerUpActive, powerUpTimer, ghostMultiplier, gameTime, baseGhostSpeed, currentLevel, score, setGameOver, setIsPaused, setPowerUpActive, setPowerUpTimer, setGhostMultiplier, setGameTime, setCurrentLevel, setScore, setLives, setGameStarted, clearPellets, clearPowerUps, clearWalls, clearGhosts } from './state.js';
 import { createMaze, clearMaze } from './maze.js';
 import { createTeleportZones, checkTeleportation, animateTeleportZones } from './teleport.js';
 import { updatePacman } from './pacman.js';
@@ -129,8 +125,8 @@ export function advanceLevel() {
     pacman.rotation.y = 0;
     setPowerUpActive(false);
     setPowerUpTimer(0);
-    const baseSpeed = 2 + (currentLevel - 1) * 0.5;
-    ghosts.forEach(g => g.speed = baseSpeed);
+    setGameTime(0);
+    ghosts.forEach(g => g.speed = baseGhostSpeed);
     const levelColors = [0x2a2a3e, 0x3e2a2a, 0x2a3e2a];
     const fogColors = [0x1a1a2e, 0x2e1a1a, 0x1a2e1a];
     floor.material.color.setHex(levelColors[currentLevel - 1] || 0x2a2a3e);

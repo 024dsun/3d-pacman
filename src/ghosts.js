@@ -194,7 +194,7 @@ function manhatten(ax, az, bx, bz) {
 }
 
 // use A* to go towards pacman or run
-// claude helped with the A* algorithm
+// claude helped with the A* algorithm and some syntax
 // david implemented with competitive programming setup 
 function findPath(startX, startZ, endX, endZ) {
     const start = posToGrid(startX, startZ);

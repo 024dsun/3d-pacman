@@ -370,9 +370,7 @@ export function updateGhostAudio(ghosts, pacmanPosition) {
 export function stopGhostAudio() {
     ghostSoundNodes.forEach(node => {
         if (node) {
-            try {
-                node.osc.stop();
-            } catch(e) {}
+            node.osc.stop();
         }
     });
     ghostSoundNodes = [];

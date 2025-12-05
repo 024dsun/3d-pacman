@@ -44,9 +44,9 @@ export function updateMinimap() {
         ctx.fill();
     });
     ctx.fillStyle = '#ff00ff';
-    powerUps.forEach(p => {
-        const x = offsetX + p.position.x * scale;
-        const z = offsetZ + p.position.z * scale;
+    powerUps.forEach(pow => {
+        const x = offsetX + pow.position.x * scale;
+        const z = offsetZ + pow.position.z * scale;
         ctx.beginPath();
         ctx.arc(x, z, 3, 0, Math.PI * 2);
         ctx.fill();
@@ -150,7 +150,7 @@ export function hideStartScreen() {
 }
 
 function init() {
-    hideStartScreen();
+hideStartScreen();
     playStartSound();
     startBackgroundMusic();
     setGameStarted(true);

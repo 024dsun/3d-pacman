@@ -1,6 +1,5 @@
 import * as THREE from 'three';
-import { scene, pacman, ghosts, teleportZones, currentLevel } from './state.js';
-import { lastTeleportTime, setLastTeleportTime, clearTeleportZones, addTeleportZone } from './state.js';
+import { scene, pacman, ghosts, teleportZones, currentLevel, lastTeleportTime, setLastTeleportTime, clearTeleportZones, addTeleportZone } from './state.js';
 import { playTeleportSound } from './audio.js';
 
 // credit to claude for the ideas on how to do the portal meshes, looks very clean
