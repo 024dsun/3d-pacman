@@ -1,92 +1,87 @@
-// Simple sound effects using Web Audio API (no external files needed)
-
 let audioContext = null;
+
 let bgMusicNodes = null;
+let mg = null;
+
+let heartbeatInterval = null;
+
+let ghostNodes = new Map();
+
+let nextHeartbeatTime = 0;
+
+let ghostSoundNodes = [];
+
+let ghostSoundUpdateInterval = null;
 
 function getAudioContext() {
-    if (!audioContext) {
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    }
+    if (!audioContext) audioContext = new window.AudioContext();
     return audioContext;
+}
+
+function drone(freq, gain) {
+    const context = getAudioContext();
+    const osc = context.createOscillator();
+    const gainNode = context.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gainNode.gain.value = gain;
+    osc.connect(gainNode);
+    gainNode.connect(mg);
+    osc.start();
+    bgMusicNodes.push(osc);
 }
 
 // Creepy ambient background music
 export function startBackgroundMusic() {
-    if (bgMusicNodes) return; // Already playing
-    
-    const ctx = getAudioContext();
+    if (bgMusicNodes) return;
+    const context = getAudioContext();
     bgMusicNodes = [];
+    mg = context.createGain();
+    mg.gain.value = 0.15;
+    mg.connect(context.destination);
+    drone(55, 0.4);
+    drone(55.5, 0.3);
     
-    // Create a dark, ambient drone
-    const masterGain = ctx.createGain();
-    masterGain.gain.value = 0.15;
-    masterGain.connect(ctx.destination);
-    
-    // Low drone
-    const drone = ctx.createOscillator();
-    const droneGain = ctx.createGain();
-    drone.type = 'sine';
-    drone.frequency.value = 55; // Low A
-    droneGain.gain.value = 0.4;
-    drone.connect(droneGain);
-    droneGain.connect(masterGain);
-    drone.start();
-    bgMusicNodes.push(drone);
-    
-    // Slightly detuned second drone for unease
-    const drone2 = ctx.createOscillator();
-    const drone2Gain = ctx.createGain();
-    drone2.type = 'sine';
-    drone2.frequency.value = 55.5; // Slightly off
-    drone2Gain.gain.value = 0.3;
-    drone2.connect(drone2Gain);
-    drone2Gain.connect(masterGain);
-    drone2.start();
-    bgMusicNodes.push(drone2);
-    
-    // Eerie high tone that slowly modulates
-    const highTone = ctx.createOscillator();
-    const highGain = ctx.createGain();
-    const highLFO = ctx.createOscillator();
-    const lfoGain = ctx.createGain();
-    
+
+    const highTone = context.createOscillator();
+    const highGain = context.createGain();
+    const highLFO = context.createOscillator();
+    const lfoGain = context.createGain();
     highTone.type = 'sine';
     highTone.frequency.value = 880;
     highGain.gain.value = 0.05;
-    
     highLFO.type = 'sine';
-    highLFO.frequency.value = 0.1; // Very slow modulation
+    highLFO.frequency.value = 0.1;
     lfoGain.gain.value = 50;
-    
     highLFO.connect(lfoGain);
     lfoGain.connect(highTone.frequency);
     highTone.connect(highGain);
-    highGain.connect(masterGain);
-    
+    highGain.connect(mg);
     highTone.start();
     highLFO.start();
     bgMusicNodes.push(highTone, highLFO);
     
-    // Occasional creepy "heartbeat" pulse
     const pulseInterval = setInterval(() => {
         if (!bgMusicNodes) {
             clearInterval(pulseInterval);
             return;
         }
+        const ctx = getAudioContext();
         const pulse = ctx.createOscillator();
-        const pulseGain = ctx.createGain();
+        const pg = ctx.createGain();
+        // const lfo = ctx.createOscillator();
+        // const lfoGain = ctx.createGain();
         pulse.type = 'sine';
         pulse.frequency.value = 40;
-        pulseGain.gain.setValueAtTime(0.2, ctx.currentTime);
-        pulseGain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-        pulse.connect(pulseGain);
-        pulseGain.connect(masterGain);
+        pg.gain.setValueAtTime(0.2, ctx.currentTime);
+        pg.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+
+        pulse.connect(pg);
+        pg.connect(mg);
         pulse.start();
         pulse.stop(ctx.currentTime + 0.3);
     }, 2000 + Math.random() * 2000);
-    
     bgMusicNodes.pulseInterval = pulseInterval;
-    bgMusicNodes.masterGain = masterGain;
 }
 
 // Stop background music
@@ -102,230 +97,196 @@ export function stopBackgroundMusic() {
     }
 }
 
-// Pellet collect sound - short high beep
+// pellet sound
 export function playPelletSound() {
-    const ctx = getAudioContext();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    
+    const context = getAudioContext();
+    const osc = context.createOscillator();
+    const gain = context.createGain();
     osc.connect(gain);
-    gain.connect(ctx.destination);
-    
+    gain.connect(context.destination);
     osc.frequency.value = 880;
     osc.type = 'sine';
-    gain.gain.setValueAtTime(0.1, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
-    
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.1, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.1);
+    osc.start(context.currentTime);
+    osc.stop(context.currentTime + 0.1);
 }
 
-// Power-up collect sound - ascending tones
+// power up sound
 export function playPowerUpSound() {
-    const ctx = getAudioContext();
+    const context = getAudioContext();
     const frequencies = [440, 554, 659, 880];
-    
-    frequencies.forEach((freq, i) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        
+    frequencies.forEach((freq, index) => {
+        const osc = context.createOscillator();
+        const gain = context.createGain();
         osc.connect(gain);
-        gain.connect(ctx.destination);
-        
+        gain.connect(context.destination);
         osc.frequency.value = freq;
         osc.type = 'square';
-        gain.gain.setValueAtTime(0.1, ctx.currentTime + i * 0.08);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.08 + 0.08);
-        
-        osc.start(ctx.currentTime + i * 0.08);
-        osc.stop(ctx.currentTime + i * 0.08 + 0.1);
+        gain.gain.setValueAtTime(0.1, context.currentTime + index * 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.01, context.currentTime + index * 0.08 + 0.08);
+        osc.start(context.currentTime + index * 0.08);
+        osc.stop(context.currentTime + index * 0.08 + 0.1);
     });
 }
 
-// Ghost eaten sound - descending wah
+// ghost eaten sound
 export function playGhostEatenSound() {
-    const ctx = getAudioContext();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    
+    const context = getAudioContext();
+    const osc = context.createOscillator();
+    const gain = context.createGain();
     osc.connect(gain);
-    gain.connect(ctx.destination);
-    
-    osc.frequency.setValueAtTime(800, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 0.3);
+    gain.connect(context.destination);
+    osc.frequency.setValueAtTime(800, context.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(200, context.currentTime + 0.3);
     osc.type = 'sawtooth';
-    gain.gain.setValueAtTime(0.15, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-    
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.3);
+    gain.gain.setValueAtTime(0.15, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.3);
+    osc.start(context.currentTime);
+    osc.stop(context.currentTime + 0.3);
 }
 
-// Death sound - low descending tone
+// death sound
 export function playDeathSound() {
-    const ctx = getAudioContext();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    
+    const context = getAudioContext();
+    const osc = context.createOscillator();
+    const gain = context.createGain();
     osc.connect(gain);
-    gain.connect(ctx.destination);
-    
-    osc.frequency.setValueAtTime(400, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.5);
+    gain.connect(context.destination);
+    osc.frequency.setValueAtTime(400, context.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(50, context.currentTime + 0.5);
     osc.type = 'sawtooth';
-    gain.gain.setValueAtTime(0.2, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
-    
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.5);
+    gain.gain.setValueAtTime(0.2, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.5);
+    osc.start(context.currentTime);
+    osc.stop(context.currentTime + 0.5);
 }
 
-// Jumpscare sound - loud chaotic screech
+// jumpscare sound
 export function playJumpscareSound() {
-    const ctx = getAudioContext();
-    
-    // Create multiple chaotic oscillators
+    const context = getAudioContext();
     const freqs = [800, 1200, 2000, 5000, 100];
     const types = ['sawtooth', 'square', 'sawtooth', 'sawtooth', 'square'];
-    
-    freqs.forEach((f, i) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        
-        osc.type = types[i];
+    freqs.forEach((f, index) => {
+        const osc = context.createOscillator();
+        const gain = context.createGain();
+        osc.type = types[index];
         osc.frequency.value = f;
-        
-        // Aggressive frequency modulation
-        osc.frequency.exponentialRampToValueAtTime(f * 0.5, ctx.currentTime + 0.3);
-        
-        gain.gain.setValueAtTime(0.3, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1.5);
-        
+        osc.frequency.exponentialRampToValueAtTime(f * 0.5, context.currentTime + 0.3);
+        gain.gain.setValueAtTime(0.3, context.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 1.5);
         osc.connect(gain);
-        gain.connect(ctx.destination);
-        
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 1.5);
+        gain.connect(context.destination);
+        osc.start(context.currentTime);
+        osc.stop(context.currentTime + 1.5);
     });
-    
-    // Add noise burst
-    const bufferSize = ctx.sampleRate * 1.0; // 1 second
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const bufferSize = context.sampleRate * 1.0;
+    const buffer = context.createBuffer(1, bufferSize, context.sampleRate);
     const data = buffer.getChannelData(0);
-    
     for (let i = 0; i < bufferSize; i++) {
         data[i] = Math.random() * 2 - 1;
     }
-    
-    const noise = ctx.createBufferSource();
+    const noise = context.createBufferSource();
     noise.buffer = buffer;
-    
-    const noiseGain = ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.8, ctx.currentTime);
-    noiseGain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1.0);
-    
+    const noiseGain = context.createGain();
+    noiseGain.gain.setValueAtTime(0.8, context.currentTime);
+    noiseGain.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 1.0);
     noise.connect(noiseGain);
-    noiseGain.connect(ctx.destination);
-    noise.start(ctx.currentTime);
+    noiseGain.connect(context.destination);
+    noise.start(context.currentTime);
 }
 
-// Level complete sound - victory fanfare
+// teleport sound
+export function playTeleportSound() {
+    const context = getAudioContext();
+    const osc = context.createOscillator();
+    const gain = context.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(200, context.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(800, context.currentTime + 0.1);
+    osc.frequency.exponentialRampToValueAtTime(100, context.currentTime + 0.3);
+    gain.gain.setValueAtTime(0.3, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.3);
+    osc.connect(gain);
+    gain.connect(context.destination);
+    osc.start(context.currentTime);
+    osc.stop(context.currentTime + 0.3);
+    const osc2 = context.createOscillator();
+    const gain2 = context.createGain();
+    osc2.type = 'triangle';
+    osc2.frequency.setValueAtTime(400, context.currentTime);
+    osc2.frequency.exponentialRampToValueAtTime(1200, context.currentTime + 0.15);
+    osc2.frequency.exponentialRampToValueAtTime(300, context.currentTime + 0.3);
+    gain2.gain.setValueAtTime(0.15, context.currentTime);
+    gain2.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.3);
+    osc2.connect(gain2);
+    gain2.connect(context.destination);
+    osc2.start(context.currentTime);
+    osc2.stop(context.currentTime + 0.3);
+}
+
+// victory sound
 export function playLevelCompleteSound() {
-    const ctx = getAudioContext();
-    const notes = [523, 659, 784, 1047]; // C5, E5, G5, C6
-    
-    notes.forEach((freq, i) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        
+    const context = getAudioContext();
+    const notes = [523, 659, 784, 1047];
+    notes.forEach((freq, index) => {
+        const osc = context.createOscillator();
+        const gain = context.createGain();
         osc.connect(gain);
-        gain.connect(ctx.destination);
-        
+        gain.connect(context.destination);
         osc.frequency.value = freq;
         osc.type = 'triangle';
-        gain.gain.setValueAtTime(0.15, ctx.currentTime + i * 0.15);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.15 + 0.2);
-        
-        osc.start(ctx.currentTime + i * 0.15);
-        osc.stop(ctx.currentTime + i * 0.15 + 0.25);
+        gain.gain.setValueAtTime(0.15, context.currentTime + index * 0.15);
+        gain.gain.exponentialRampToValueAtTime(0.01, context.currentTime + index * 0.15 + 0.2);
+        osc.start(context.currentTime + index * 0.15);
+        osc.stop(context.currentTime + index * 0.15 + 0.25);
     });
 }
 
 // Game start sound
 export function playStartSound() {
     const ctx = getAudioContext();
-    const notes = [262, 330, 392, 523]; // C4, E4, G4, C5
-    
+    const notes = [262, 330, 392, 523];
     notes.forEach((freq, i) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        
         osc.connect(gain);
         gain.connect(ctx.destination);
-        
         osc.frequency.value = freq;
         osc.type = 'sine';
         gain.gain.setValueAtTime(0.1, ctx.currentTime + i * 0.1);
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.1 + 0.15);
-        
         osc.start(ctx.currentTime + i * 0.1);
         osc.stop(ctx.currentTime + i * 0.1 + 0.2);
     });
 }
 
-// ============================================
-// HEARTBEAT & 3D POSITIONAL GHOST AUDIO
-// ============================================
-
-let heartbeatInterval = null;
-let ghostAudioNodes = new Map(); // Map ghost index to audio nodes
-
-// Start heartbeat system - intensity based on closest ghost distance
 export function startHeartbeat() {
     if (heartbeatInterval) return;
-    
-    const ctx = getAudioContext();
-    let lastBeatTime = 0;
-    
-    heartbeatInterval = setInterval(() => {
-        // This will be called from game loop with distance
-    }, 50);
+    heartbeatInterval = setInterval(() => {}, 50);
 }
 
-// Update heartbeat based on closest ghost distance (call this from game loop)
-let nextHeartbeatTime = 0;
 export function updateHeartbeat(closestGhostDistance) {
     if (!audioContext) return;
-    
     const ctx = getAudioContext();
     const now = Date.now();
-    
-    // Calculate heartbeat intensity (0 = far/calm, 1 = very close/panic)
     const maxDistance = 12;
     const minDistance = 2;
     const intensity = Math.max(0, Math.min(1, 
         1 - (closestGhostDistance - minDistance) / (maxDistance - minDistance)
     ));
-    
-    // Skip if too far (no heartbeat)
     if (intensity <= 0) return;
-    
-    // Heartbeat rate: 60 BPM when far, up to 180 BPM when very close
     const bpm = 60 + intensity * 120;
     const beatInterval = 60000 / bpm;
-    
     if (now >= nextHeartbeatTime) {
         nextHeartbeatTime = now + beatInterval;
         playHeartbeat(intensity);
     }
 }
 
-// Play a single heartbeat (lub-dub) using sine waves with proper envelope
 function playHeartbeat(intensity) {
     const ctx = getAudioContext();
     const volume = 0.15 + intensity * 0.5;
-    
-    // LUB (first beat) - two quick sine pulses
     const lub1 = ctx.createOscillator();
     const lub1Gain = ctx.createGain();
     lub1.type = 'sine';
@@ -337,8 +298,6 @@ function playHeartbeat(intensity) {
     lub1Gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.1);
     lub1.start(ctx.currentTime);
     lub1.stop(ctx.currentTime + 0.12);
-    
-    // DUB (second beat) - slightly higher, comes right after
     const dub = ctx.createOscillator();
     const dubGain = ctx.createGain();
     dub.type = 'sine';
@@ -361,91 +320,53 @@ export function stopHeartbeat() {
     nextHeartbeatTime = 0;
 }
 
-// ============================================
-// 3D POSITIONAL GHOST AUDIO - Spooky whispers/drones
-// ============================================
+export function initGhostAudio() {}
 
-let ghostSoundNodes = [];
-let ghostSoundUpdateInterval = null;
-
-// Initialize ghost positional audio system
-export function initGhostAudio() {
-    // Will be updated each frame
-}
-
-// Update ghost 3D audio based on positions (call from game loop)
 export function updateGhostAudio(ghosts, pacmanPosition) {
     if (!audioContext) return;
-    
     const ctx = getAudioContext();
-    
     ghosts.forEach((ghost, index) => {
         const ghostPos = ghost.mesh.position;
         const distance = pacmanPosition.distanceTo(ghostPos);
-        
-        // Calculate direction for panning (-1 = left, 1 = right)
         const dx = ghostPos.x - pacmanPosition.x;
         const dz = ghostPos.z - pacmanPosition.z;
-        // Simple stereo panning based on x difference
         const pan = Math.max(-1, Math.min(1, dx / 10));
-        
-        // Volume based on distance (louder when closer)
         const maxDist = 15;
         const minDist = 1;
-        const volume = Math.max(0, Math.min(1, 
-            1 - (distance - minDist) / (maxDist - minDist)
-        )) * 0.15;
-        
-        // Create or update ghost sound
+        const volume = Math.max(0, Math.min(1, 1 - (distance - minDist) / (maxDist - minDist))) * 0.15;
         if (!ghostSoundNodes[index] && volume > 0.01) {
-            // Create spooky drone for this ghost
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
             const panner = ctx.createStereoPanner();
             const filter = ctx.createBiquadFilter();
-            
-            // Each ghost has slightly different frequency for variety
             const baseFreq = 80 + index * 15;
             osc.type = 'sawtooth';
             osc.frequency.value = baseFreq;
-            
-            // Low-pass filter for muffled, spooky sound
             filter.type = 'lowpass';
             filter.frequency.value = 200 + index * 50;
             filter.Q.value = 5;
-            
             osc.connect(filter);
             filter.connect(gain);
             gain.connect(panner);
             panner.connect(ctx.destination);
-            
             gain.gain.value = 0;
             panner.pan.value = pan;
-            
             osc.start();
-            
             ghostSoundNodes[index] = { osc, gain, panner, filter };
         }
-        
-        // Update existing sound
         if (ghostSoundNodes[index]) {
             const node = ghostSoundNodes[index];
-            // Smooth volume transition
             node.gain.gain.setTargetAtTime(volume, ctx.currentTime, 0.1);
             node.panner.pan.setTargetAtTime(pan, ctx.currentTime, 0.1);
-            
-            // Modulate filter based on distance (more muffled when far)
             const filterFreq = 100 + (1 - distance / maxDist) * 400;
             node.filter.frequency.setTargetAtTime(filterFreq, ctx.currentTime, 0.1);
-            
-            // Add slight pitch wobble for creepiness
             const wobble = Math.sin(Date.now() * 0.002 + index) * 5;
             node.osc.frequency.setTargetAtTime(80 + index * 15 + wobble, ctx.currentTime, 0.1);
         }
     });
 }
 
-// Stop all ghost audio
+
 export function stopGhostAudio() {
     ghostSoundNodes.forEach(node => {
         if (node) {
@@ -456,3 +377,5 @@ export function stopGhostAudio() {
     });
     ghostSoundNodes = [];
 }
+
+// audio is attributed to claude

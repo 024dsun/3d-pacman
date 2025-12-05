@@ -1,15 +1,13 @@
 import * as THREE from 'three';
-import { 
-    scene, pacman, pellets, powerUps, score, powerUpActive, powerUpTimer, ghostMultiplier, ghosts,
-    setScore, setPowerUpActive, setPowerUpTimer, setGhostMultiplier,
-    addPellet, addPowerUp, removePellet, removePowerUp, clearPellets, clearPowerUps
-} from './state.js';
+import { scene, pacman, pellets, powerUps, score, powerUpActive, powerUpTimer, ghostMultiplier, ghosts } from './state.js';
+import { setScore, setPowerUpActive, setPowerUpTimer, setGhostMultiplier } from './state.js';
+import { addPellet, addPowerUp, removePellet, removePowerUp, clearPellets, clearPowerUps } from './state.js';
 import { checkWallCollisionSimple } from './collision.js';
 import { updateHUD } from './ui.js';
 import { playPelletSound, playPowerUpSound } from './audio.js';
 import { createPelletSparkle, createPowerUpBurst, screenShake } from './effects.js';
 
-// Create pellets and power ups
+
 export function createPellets() {
     const pelletGeometry = new THREE.SphereGeometry(0.15, 8, 8);
     const pelletMaterial = new THREE.MeshStandardMaterial({ 
@@ -17,8 +15,6 @@ export function createPellets() {
         emissive: 0xffff00,
         emissiveIntensity: 0.6
     });
-    
-    // Create power up geometry
     const powerUpGeometry = new THREE.SphereGeometry(0.3, 16, 16);
     const powerUpMaterial = new THREE.MeshStandardMaterial({ 
         color: 0xff00ff,
@@ -26,11 +22,15 @@ export function createPellets() {
         emissiveIntensity: 0.8
     });
     
-    // Place pellets
-    for (let x = -12; x <= 12; x += 2) {
-        for (let z = -12; z <= 12; z += 2) {
-            if (Math.abs(x) < 2 && Math.abs(z) < 2) continue;
-            const pos = new THREE.Vector3(x, 0.5, z);
+
+    for (let x = -6; x <= 6; x += 1) {
+        for (let z = -6; z <= 6; z += 1) {
+            if (Math.abs(x) < 1 && Math.abs(z) < 1) {
+                // break;
+                continue;
+            }
+            const pos = new THREE.Vector3(2 * x, 0.5, 2 * z);
+
             if (!checkWallCollisionSimple(pos)) {
                 const pellet = new THREE.Mesh(pelletGeometry, pelletMaterial);
                 pellet.position.copy(pos);
@@ -40,7 +40,6 @@ export function createPellets() {
         }
     }
     
-    // Add power ups in corners
     const powerUpPositions = [
         [-12, 0.5, -12],
         [12, 0.5, -12],
@@ -59,7 +58,6 @@ export function createPellets() {
     });
 }
 
-// Clear all pellets and power ups
 export function clearAllPellets() {
     pellets.forEach(p => scene.remove(p));
     powerUps.forEach(p => scene.remove(p));
@@ -67,7 +65,6 @@ export function clearAllPellets() {
     clearPowerUps();
 }
 
-// Collect pellets
 export function checkPelletCollection() {
     for (let i = pellets.length - 1; i >= 0; i--) {
         const pellet = pellets[i];
@@ -83,7 +80,6 @@ export function checkPelletCollection() {
     }
 }
 
-// Collect powerups
 export function checkPowerUpCollection() {
     for (let i = powerUps.length - 1; i >= 0; i--) {
         const powerUp = powerUps[i];
@@ -91,14 +87,18 @@ export function checkPowerUpCollection() {
         if (dist < 0.8) {
             scene.remove(powerUp);
             removePowerUp(i);
+
             setScore(score + 50);
+
             setPowerUpActive(true);
+            
             setPowerUpTimer(10);
-            setGhostMultiplier(1); // Reset multiplier for new power-up
+            
+            setGhostMultiplier(1);
+            
             playPowerUpSound();
             createPowerUpBurst(powerUp.position.clone());
             screenShake(0.2, 0.2);
-            // Reset ghost immunity
             ghosts.forEach(ghost => {
                 ghost.immuneToPowerUp = false;
             });
@@ -107,19 +107,13 @@ export function checkPowerUpCollection() {
     }
 }
 
-// Pellet glow effect
 export function animatePellets() {
     const time = Date.now() * 0.003;
-    pellets.forEach(pellet => {
-        pellet.scale.setScalar(1 + Math.sin(time * 2) * 0.2);
-    });
+    pellets.forEach(pellet => { pellet.scale.setScalar(1 + Math.sin(time * 2) * 0.2); });
 }
 
-// Power up glow effect
+
 export function animatePowerUps(delta) {
     const time = Date.now() * 0.003;
-    powerUps.forEach((powerUp, index) => {
-        powerUp.scale.setScalar(1 + Math.sin(time * 1.5 + index) * 0.3);
-        powerUp.rotation.y += delta * 2;
-    });
+    powerUps.forEach((powerUp, index) => { powerUp.scale.setScalar(1 + Math.sin(time * 1.5 + index) * 0.3); powerUp.rotation.y += delta * 2; });
 }

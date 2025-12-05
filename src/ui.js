@@ -1,17 +1,9 @@
-import { 
-    score, lives, currentLevel, gameOver, isPaused, gameStarted, powerUpActive, powerUpTimer,
-    ghostMultiplier, gameTime, cameraMode, pellets, powerUps, pacman, ghosts, hudElement,
-    setHudElement, setGameStarted, setGameOver, setScore, setLives, setCurrentLevel,
-    setGameTime, setPowerUpActive, setPowerUpTimer, setGhostMultiplier
-} from './state.js';
+import { score, lives, currentLevel, gameOver, isPaused, gameStarted, powerUpActive, powerUpTimer, ghostMultiplier, gameTime, cameraMode, pellets, powerUps, pacman, ghosts, hudElement, setHudElement, setGameStarted, setGameOver, setScore, setLives, setCurrentLevel, setGameTime, setPowerUpActive, setPowerUpTimer, setGhostMultiplier } from './state.js';
 import { playStartSound, startBackgroundMusic, stopBackgroundMusic, stopGhostAudio } from './audio.js';
 
-// Start screen element
 let startScreen;
 let minimapCanvas;
 let minimapCtx;
-
-// Create minimap
 export function createMinimap() {
     minimapCanvas = document.createElement('canvas');
     minimapCanvas.width = 150;
@@ -26,26 +18,23 @@ export function createMinimap() {
     minimapCtx = minimapCanvas.getContext('2d');
 }
 
-// Update minimap
 export function updateMinimap() {
     if (!minimapCtx || !gameStarted) return;
-    
     const ctx = minimapCtx;
     const size = 150;
-    const scale = size / 30; // Map is roughly 30x30 units
+    const scale = size / 30;
     const offsetX = size / 2;
     const offsetZ = size / 2;
-    
-    // Clear
     ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, 0, size, size);
-    
-    // Draw walls (simplified - just outer boundary)
     ctx.strokeStyle = '#4444aa';
     ctx.lineWidth = 2;
     ctx.strokeRect(5, 5, size - 10, size - 10);
-    
-    // Draw pellets as tiny dots
+
+
+    // ctx.beginPath();
+
+
     ctx.fillStyle = '#ffff00';
     pellets.forEach(p => {
         const x = offsetX + p.position.x * scale;
@@ -54,8 +43,6 @@ export function updateMinimap() {
         ctx.arc(x, z, 1, 0, Math.PI * 2);
         ctx.fill();
     });
-    
-    // Draw power-ups
     ctx.fillStyle = '#ff00ff';
     powerUps.forEach(p => {
         const x = offsetX + p.position.x * scale;
@@ -65,9 +52,9 @@ export function updateMinimap() {
         ctx.fill();
     });
     
-    // Draw ghosts (only if visible)
+
     ghosts.forEach(g => {
-        if (!g.mesh.visible) return; // Skip hidden ghosts
+        if (!g.mesh.visible) return;
         const x = offsetX + g.mesh.position.x * scale;
         const z = offsetZ + g.mesh.position.z * scale;
         ctx.fillStyle = powerUpActive && !g.immuneToPowerUp ? '#0000ff' : '#' + g.color.toString(16).padStart(6, '0');
@@ -75,8 +62,6 @@ export function updateMinimap() {
         ctx.arc(x, z, 4, 0, Math.PI * 2);
         ctx.fill();
     });
-    
-    // Draw Pac-Man
     ctx.fillStyle = '#ffff00';
     const px = offsetX + pacman.position.x * scale;
     const pz = offsetZ + pacman.position.z * scale;
@@ -85,7 +70,7 @@ export function updateMinimap() {
     ctx.fill();
 }
 
-// Create start screen
+// claude helped with html
 export function createStartScreen() {
     startScreen = document.createElement('div');
     startScreen.style.position = 'absolute';
@@ -129,13 +114,10 @@ export function createStartScreen() {
     `;
     document.body.appendChild(startScreen);
     
-    // Button hover effect
-    const btn = document.getElementById('startButton');
-    btn.onmouseover = () => { btn.style.background = '#00ff00'; btn.style.transform = 'scale(1.1)'; };
-    btn.onmouseout = () => { btn.style.background = '#ffff00'; btn.style.transform = 'scale(1)'; };
-    btn.onclick = startGame;
-    
-    // Also start on Enter key
+    const button = document.getElementById('startButton');
+    button.onmouseover = () => { button.style.background = '#00ff00'; button.style.transform = 'scale(1.1)'; };
+    button.onmouseout = () => { button.style.background = '#ffff00'; button.style.transform = 'scale(1)'; };
+    button.onclick = startGame;
     document.addEventListener('keydown', function onEnter(e) {
         if ((e.key === 'Enter' || e.key === ' ') && !gameStarted) {
             startGame();
@@ -143,35 +125,31 @@ export function createStartScreen() {
     });
 }
 
-// Show start screen
 export function showStartScreen(isGameOver = false) {
     if (!startScreen) createStartScreen();
     startScreen.style.display = 'flex';
-    stopBackgroundMusic(); // Stop music when showing start/game over screen
-    stopGhostAudio(); // Stop ghost sounds
+    stopBackgroundMusic();
+    stopGhostAudio();
     
-    // Update text if game over
     if (isGameOver) {
         startScreen.querySelector('h1').innerHTML = '👻 GAME OVER 👻';
         startScreen.querySelector('h1').style.color = '#ff0000';
         startScreen.querySelector('p').textContent = `Final Score: ${score}`;
         document.getElementById('startButton').textContent = 'PLAY AGAIN';
-    } else {
+    } 
+    else {
         startScreen.querySelector('h1').innerHTML = '👻 3D PAC-MAN 👻';
         startScreen.querySelector('h1').style.color = '#ffff00';
         document.getElementById('startButton').textContent = 'START GAME';
     }
 }
-
-// Hide start screen
 export function hideStartScreen() {
     if (startScreen) {
         startScreen.style.display = 'none';
     }
 }
 
-// Start game
-export function startGame() {
+function init() {
     hideStartScreen();
     playStartSound();
     startBackgroundMusic();
@@ -184,8 +162,11 @@ export function startGame() {
     setPowerUpActive(false);
     setPowerUpTimer(0);
     setGhostMultiplier(1);
+}
+
+export function startGame() {
+    init();
     
-    // Reset positions
     pacman.position.set(0, 0.5, 0);
     pacman.rotation.y = 0;
     ghosts.forEach(ghost => {
@@ -195,11 +176,9 @@ export function startGame() {
         ghost.respawnTime = 0;
         ghost.immuneToPowerUp = false;
     });
-    
     updateHUD();
 }
 
-// Create HUD
 export function createHUD() {
     const hud = document.createElement('div');
     hud.style.position = 'absolute';
@@ -216,19 +195,15 @@ export function createHUD() {
     updateHUD();
 }
 
-// Update HUD
+// thanks claude again for the html
 export function updateHUD() {
     if (!hudElement) return;
     
     const multiplierText = ghostMultiplier > 1 ? ` (x${ghostMultiplier} next ghost!)` : '';
     const powerUpText = powerUpActive ? `<br><span style="color: #ff00ff; font-weight: bold;">POWER UP: ${Math.ceil(powerUpTimer)}s${multiplierText}</span>` : '';
-    
-    // Level names for flavor
     const levelNames = ['The Beginning', 'Corridor Chaos', 'Winding Nightmare'];
-    
     let pauseText = '';
     if (isPaused && pellets.length === 0 && powerUps.length === 0 && !gameOver) {
-        // Level transition
         pauseText = `<br><br><span style="color: #00ffff; font-weight: bold; font-size: 24px;">LEVEL ${currentLevel}: ${levelNames[currentLevel - 1]}</span><br><span style="color: #ffff00;">Get ready...</span>`;
     } else if (isPaused) {
         pauseText = '<br><br><span style="color: #ffff00; font-weight: bold;">PAUSED - Press SPACE to resume</span>';
@@ -243,7 +218,6 @@ export function updateHUD() {
     const fpText = cameraMode === 3 ? '<br><span style="color: #88ff88;">Click to enable mouse look | ESC to exit</span>' : '';
     const levelText = `<br><span style="color: #00ffff; font-weight: bold;">Level ${currentLevel}/3: ${levelNames[currentLevel - 1]}</span>`;
     const teleportHint = currentLevel > 1 ? `<br><span style="color: #00ffff; font-size: 12px;">💫 Use cyan portals on sides to teleport!</span>` : '';
-    
     hudElement.innerHTML = `
         Score: ${score}<br>
         Lives: ${lives}${levelText}${cameraText}${timeText}<br>
