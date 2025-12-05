@@ -5,8 +5,11 @@ import { walls } from './state.js';
 export function checkWallCollision(position, radius = 0.5) {
     for (let wall of walls) {
         const wallBox = new THREE.Box3().setFromObject(wall);
-        const entityBox = new THREE.Box3().setFromCenterAndSize(position,new THREE.Vector3(radius * 2, radius * 2, radius * 2));
-        if (wallBox.intersectsBox(entityBox)) {
+
+        const doubleRadius = radius * 2;
+        const radiusVec = new THREE.Vector3(doubleRadius, doubleRadius, doubleRadius);
+
+        if (wallBox.intersectsBox(new THREE.Box3().setFromCenterAndSize(position,radiusVec))) {
             return true;
         }
     }

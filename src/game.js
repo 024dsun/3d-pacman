@@ -12,7 +12,7 @@ import { playGhostEatenSound, playDeathSound, playLevelCompleteSound, playJumpsc
 import { createGhostExplosion, createDeathEffect, screenShake, updateEffects } from './effects.js';
 
 
-let isDeathSequenceActive = false;
+let death = false;
 
 
 function ghostReset() {
@@ -94,7 +94,7 @@ function updateAll(delta) {
 }
 
 export function resetLevel() {
-    isDeathSequenceActive = false;
+    death = false;
 
     const overlay = document.getElementById('jumpscare-overlay');
     if (overlay) {
@@ -193,7 +193,7 @@ function checkGhostCollisions() {
     for (let ghost of ghosts) {
         const dist = pacman.position.distanceTo(ghost.mesh.position);
         if (dist < 1.0) {
-            console.log("COLLISION! dist:", dist, "powerUpActive:", powerUpActive, "respawnTime:", ghost.respawnTime, "isDeathSequenceActive:", isDeathSequenceActive);
+            console.log("COLLISION! dist:", dist, "powerUpActive:", powerUpActive, "respawnTime:", ghost.respawnTime, "death:", death);
             const ghostVulnerable = powerUpActive && !ghost.immuneToPowerUp;
             if (ghostVulnerable) {
                 const points = 200 * ghostMultiplier;
@@ -209,8 +209,8 @@ function checkGhostCollisions() {
             } 
             else {
                 if (!ghost.respawnTime || ghost.respawnTime <= 0) {
-                    if (isDeathSequenceActive) return;
-                    isDeathSequenceActive = true;
+                    if (death) return;
+                    death = true;
                     playJumpscareSound();
                     const overlay = document.getElementById('jumpscare-overlay');
                     if (overlay) {
@@ -246,7 +246,7 @@ function checkGhostCollisions() {
                         updateHUD();
                         
                         setIsPaused(false);
-                        isDeathSequenceActive = false;
+                        death = false;
                     }, 1500);
                     return;
                 }

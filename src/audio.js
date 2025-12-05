@@ -115,28 +115,35 @@ export function playPelletSound() {
 // power up sound
 export function playPowerUpSound() {
     const context = getAudioContext();
-    const frequencies = [440, 554, 659, 880];
-    frequencies.forEach((freq, index) => {
+
+    [440, 554, 659, 880].forEach((freq, i) => {
         const osc = context.createOscillator();
         const gain = context.createGain();
+
         osc.connect(gain);
         gain.connect(context.destination);
+
         osc.frequency.value = freq;
         osc.type = 'square';
-        gain.gain.setValueAtTime(0.1, context.currentTime + index * 0.08);
-        gain.gain.exponentialRampToValueAtTime(0.01, context.currentTime + index * 0.08 + 0.08);
-        osc.start(context.currentTime + index * 0.08);
-        osc.stop(context.currentTime + index * 0.08 + 0.1);
+
+        const t = context.currentTime + i * 0.08;
+        gain.gain.setValueAtTime(0.1, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t);
+        osc.start(t);
+        osc.stop(t + 0.1);
     });
 }
 
 // ghost eaten sound
 export function playGhostEatenSound() {
     const context = getAudioContext();
+
     const osc = context.createOscillator();
     const gain = context.createGain();
+
     osc.connect(gain);
     gain.connect(context.destination);
+
     osc.frequency.setValueAtTime(800, context.currentTime);
     osc.frequency.exponentialRampToValueAtTime(200, context.currentTime + 0.3);
     osc.type = 'sawtooth';

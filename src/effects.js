@@ -18,7 +18,7 @@ const minLightIntensity = {
 export function createParticleBurst(position, color, count = 15, speed = 5) {
     const geometry = new THREE.SphereGeometry(0.08, 4, 4);
     const material = new THREE.MeshBasicMaterial({ 
-        color: color,
+        color,
         transparent: true,
         opacity: 1
     });
@@ -33,7 +33,7 @@ export function createParticleBurst(position, color, count = 15, speed = 5) {
         scene.add(particle);
         particles.push({
             mesh: particle,
-            velocity: velocity,
+            velocity,
             life: 1.0,
             decay: 1.5 + Math.random() * 0.5
         });
@@ -68,6 +68,7 @@ export function createDeathEffect(position) {
             transparent: true,
             opacity: 1
         });
+
         const particle = new THREE.Mesh(geometry, material);
         particle.position.copy(position);
         particle.position.y += Math.random() * 0.5;
@@ -83,7 +84,7 @@ export function createDeathEffect(position) {
         scene.add(particle);
         particles.push({
             mesh: particle,
-            velocity: velocity,
+            velocity,
             life: 1.0,
             decay: 0.8
         });
@@ -93,11 +94,14 @@ export function createDeathEffect(position) {
 export function updateParticles(delta) {
     for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
+
         p.velocity.y -= 10 * delta;
         p.mesh.position.add(p.velocity.clone().multiplyScalar(delta));
         p.life -= p.decay * delta;
+
         p.mesh.material.opacity = Math.max(0, p.life);
         p.mesh.scale.setScalar(p.life);
+
         if (p.life <= 0) {
             scene.remove(p.mesh);
             p.mesh.geometry.dispose();
@@ -116,12 +120,10 @@ export function screenShake(intensity = 0.3, duration = 0.3) {
 export function updateScreenShake(delta) {
     if (shakeDuration > 0) {
         shakeDuration -= delta;
-        const shakeX = (Math.random() - 0.5) * shakeIntensity * 2;
-        const shakeY = (Math.random() - 0.5) * shakeIntensity * 2;
-        const shakeZ = (Math.random() - 0.5) * shakeIntensity * 2;
-        camera.position.x += shakeX;
-        camera.position.y += shakeY;
-        camera.position.z += shakeZ;
+        const shake = (Math.random() - 0.5) * shakeIntensity * 2;
+        camera.position.x += shake;
+        camera.position.y += shake;
+        camera.position.z += shake;
         shakeIntensity *= 0.95;
         if (shakeDuration <= 0) {
             shakeIntensity = 0;
