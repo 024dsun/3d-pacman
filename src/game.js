@@ -237,10 +237,10 @@ function checkGhostCollisions() {
             } 
             else {
                 if (!ghost.respawnTime || ghost.respawnTime <= 0) {
-                    if (isDeathSequenceActive) {
+                    if (death) {
                         return;
                     }
-                    isDeathSequenceActive = true;
+                    death = true;
                     playJumpscareSound();
                     const overlay = document.getElementById('jumpscare-overlay');
                     if (overlay) {
