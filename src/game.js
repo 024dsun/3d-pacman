@@ -80,16 +80,27 @@ export function resetAfterDeath() {
 
 function updateAll(delta) {
     updatePacman(delta);
+
     checkTeleportation();
+
     checkPelletCollection();
+
     checkPowerUpCollection();
+
     checkGhostCollisions();
+
     updateGhosts(delta);
+
     animatePellets();
+
     animatePowerUps(delta);
+
     animateTeleportZones(delta);
+    
     updateCamera();
+    
     updateMinimap();
+    
     updateEffects(delta);
 }
 
@@ -109,18 +120,31 @@ export function resetLevel() {
     resetAfterDeath();
 }
 
+function reset() {
+    playLevelCompleteSound();
+
+    setCurrentLevel(currentLevel + 1);
+
+    setIsPaused(true);
+
+    clearMaze();
+
+    clearAllPellets();
+
+    clearAllGhosts();
+
+    createMaze();
+
+    createTeleportZones();
+
+    createPellets();
+
+    createGhosts();
+}
+
 // Advance to next level
 export function advanceLevel() {
-    playLevelCompleteSound();
-    setCurrentLevel(currentLevel + 1);
-    setIsPaused(true);
-    clearMaze();
-    clearAllPellets();
-    clearAllGhosts();
-    createMaze();
-    createTeleportZones();
-    createPellets();
-    createGhosts();
+    reset();
     pacman.position.set(0, 0.5, 0);
     pacman.rotation.y = 0;
     setPowerUpActive(false);
@@ -138,7 +162,9 @@ export function advanceLevel() {
 
 // Main game update loop
 export function update(delta) {
-    if (!gameStarted) return;
+    if (!gameStarted) {
+        return;
+    }
     if (gameOver) {
         updateHUD();
         return;
@@ -178,7 +204,9 @@ export function update(delta) {
     let closestGhostDist = Infinity;
     ghosts.forEach(ghost => {
         const dist = pacman.position.distanceTo(ghost.mesh.position);
-        if (dist < closestGhostDist) closestGhostDist = dist;
+        if (dist < closestGhostDist) {
+            closestGhostDist = dist;
+        }
     });
     updateHeartbeat(closestGhostDist);
     updateGhostAudio(ghosts, pacman.position);
@@ -209,8 +237,10 @@ function checkGhostCollisions() {
             } 
             else {
                 if (!ghost.respawnTime || ghost.respawnTime <= 0) {
-                    if (death) return;
-                    death = true;
+                    if (isDeathSequenceActive) {
+                        return;
+                    }
+                    isDeathSequenceActive = true;
                     playJumpscareSound();
                     const overlay = document.getElementById('jumpscare-overlay');
                     if (overlay) {
